@@ -1,0 +1,33 @@
+# Secrets — never commit these. See docs/SETUP.md.
+*.p8
+AuthKey_*.p8
+*service-account*.json
+*service_account*.json
+service-account.json
+google-play.json
+accounts.json
+apps.json
+.env
+.env.*
+!.env.example
+credentials/
+keys/
+secrets/
+*.pem
+*.p12
+*.pfx
+*.key
+id_rsa*
+# Build / deps
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+# Play analytics cache (contains business data)
+.cache/
+reports/
+.google-play-analytics-mcp/
+# OS
+.DS_Store

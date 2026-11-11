@@ -1,0 +1,36 @@
+name: CI
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  ts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspaces --if-present
+      - run: npm run build --workspaces --if-present
+      - run: npm test --workspace @store-mcp/shared
+      - name: Verify no credentials in build output
+        run: |
+          if grep -rE 'BEGIN (EC |RSA )?PRIVATE KEY|"private_key"\s*:\s*"-----BEGIN' packages/*/dist/ 2>/dev/null; then
+            echo "::error::Private key material found in dist/"
+            exit 1
+          fi
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m py_compile packages/play-analytics/server.py packages/play-analytics/gp_client.py

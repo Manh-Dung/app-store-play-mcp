@@ -1,0 +1,17 @@
+{
+  "license": "MIT",
+  "name": "@store-mcp/monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --workspace @store-mcp/shared && npm run build --workspace @store-mcp/play-operate && npm run build --workspace @store-mcp/appstore-operate",
+    "clean": "rm -rf packages/*/dist",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspace @store-mcp/shared && npm run typecheck --workspace @store-mcp/play-operate && npm run typecheck --workspace @store-mcp/appstore-operate"
+  },
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/play-operate",
+    "packages/appstore-operate",
+    "packages/shared"
+  ]
+}
