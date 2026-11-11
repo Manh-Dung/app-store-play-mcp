@@ -1,8 +1,7 @@
 {
-  "name": "apple-app-store-connect-mcp",
+  "name": "@store-mcp/appstore-operate",
   "version": "0.5.0",
-  "mcpName": "io.github.devinwang/app-store-connect-mcp",
-  "description": "Complete Model Context Protocol (MCP) server for Apple's App Store Connect API — 1316 tools, 100% coverage. TestFlight, Xcode Cloud, Game Center, App Clips, in-app purchases, subscriptions, analytics, review submissions, provisioning. Works with Claude, Cursor, VS Code, Codex, Gemini CLI, Windsurf, or any MCP client.",
+  "description": "[fork] Complete Model Context Protocol (MCP) server for Apple's App Store Connect API \u2014 1316 tools, 100% coverage. TestFlight, Xcode Cloud, Game Center, App Clips, in-app purchases, subscriptions, analytics, review submissions, provisioning. Works with Claude, Cursor, VS Code, Codex, Gemini CLI, Windsurf, or any MCP client.",
   "keywords": [
     "mcp",
     "mcp-server",
@@ -47,9 +46,9 @@
   "license": "MIT",
   "author": "Devin Wang",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/overlay/index.js",
   "bin": {
-    "app-store-connect-mcp": "dist/index.js"
+    "appstore-operate": "dist/overlay/index.js"
   },
   "files": [
     "dist/",
@@ -67,8 +66,6 @@
     "postbuild": "chmod +x dist/index.js",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "codegen": "node --import tsx scripts/codegen.ts",
@@ -78,7 +75,8 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "jsonwebtoken": "^9.0.2",
     "undici": "^6.21.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@store-mcp/shared": "0.1.0"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.7",

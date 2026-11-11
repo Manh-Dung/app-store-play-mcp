@@ -30,13 +30,16 @@ packages/shared/             # Không biết gì về Play hay Apple.
   src/index.ts               # filterTools, isWriteTool, destructiveGate,
                              # redact, translateError, parseServerArgs
 packages/play-operate/       # Chỉ biết Play Publisher API.
-  src/profiles.ts            # profile -> tiền tố tool
-  src/safety.ts              # re-export shared + profiles
-  src/server.ts              # createServer({workers, readOnly}) — ĐÃ PATCH
-  src/index.ts               # parse --workers/--read-only/--help — ĐÃ PATCH
+  src/profiles.ts            # profile -> tiền tố tool (file mới)
+  src/safety.ts              # re-export shared + profiles (file mới)
+  src/overlay/server.ts      # filtered server quanh upstream allTools (file mới)
+  src/overlay/index.ts       # parse --workers/--read-only/--help (file mới)
+  src/server.ts, src/index.ts # UPSTREAM, KHÔNG SỬA — để subtree pull sạch
 packages/appstore-operate/   # Chỉ biết App Store Connect API.
-  src/profiles.ts            # profile -> substring tool name
-  src/safety.ts, src/server.ts, src/index.ts  # ĐÃ PATCH tương tự
+  src/profiles.ts            # profile -> substring tool name (file mới)
+  src/safety.ts              # (file mới)
+  src/overlay/server.ts, src/overlay/index.ts  # (file mới, như play-operate)
+  src/server.ts, src/index.ts # UPSTREAM, KHÔNG SỬA
 packages/play-analytics/     # Chỉ biết GCS CSV. Không sửa logic upstream.
   server.py, gp_client.py    # Giữ nguyên, chỉ thêm README-FORK.md
 ```

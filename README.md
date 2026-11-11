@@ -12,6 +12,13 @@ vì auth, API và quyền của 3 server khác nhau hoàn toàn.
 
 Shared safety layer: `packages/shared` — xem `docs/ARCHITECTURE.md`.
 
+> **Repo này không phải GitHub Fork.** Fork public thì không private được —
+> đây là repo mới + `git subtree --squash` từ 3 repo MIT (xem `docs/SYNC.md`
+> và `upstream-versions.json`). Target trên GitHub:
+> `github.com/Manh-Dung/app-store-play-mcp` — repo này hiện đang **PUBLIC,
+> trống, chưa push gì**; chốt visibility (public/private) trong Settings
+> trước khi push lần đầu.
+
 ## Chạy
 
 ```bash
@@ -28,8 +35,8 @@ python3 -m py_compile server.py gp_client.py
 Mỗi server có `--help` (không cần credential):
 
 ```bash
-node packages/play-operate/dist/index.js --help
-node packages/appstore-operate/dist/index.js --help
+node packages/play-operate/dist/overlay/index.js --help
+node packages/appstore-operate/dist/overlay/index.js --help
 ```
 
 ## Cấu hình
@@ -41,9 +48,9 @@ key/bucket theo `docs/SETUP.md`. **Không commit key thật, xem `.gitignore`.**
 ```json
 {
   "mcpServers": {
-    "play-operate":     { "command": "node", "args": ["<repo>/packages/play-operate/dist/index.js", "--workers", "release,reviews,listings"] },
+    "play-operate":     { "command": "node", "args": ["<repo>/packages/play-operate/dist/overlay/index.js", "--workers", "release,reviews,listings"] },
     "play-analytics":   { "command": "<repo>/packages/play-analytics/.venv/bin/python", "args": ["<repo>/packages/play-analytics/server.py"] },
-    "appstore-operate": { "command": "node", "args": ["<repo>/packages/appstore-operate/dist/index.js", "--workers", "apps,builds,testflight"] }
+    "appstore-operate": { "command": "node", "args": ["<repo>/packages/appstore-operate/dist/overlay/index.js", "--workers", "apps,builds,testflight"] }
   }
 }
 ```
@@ -56,7 +63,7 @@ App Store operate: `apps, builds, testflight, monetization, marketing, analytics
 Ví dụ chỉ bật release + reviews cho Play:
 
 ```bash
-node packages/play-operate/dist/index.js --workers release,reviews
+node packages/play-operate/dist/overlay/index.js --workers release,reviews
 ```
 
 ### An toàn — đọc kỹ trước khi bật tool ghi

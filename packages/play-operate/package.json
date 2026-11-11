@@ -1,8 +1,7 @@
 {
-  "name": "google-play-developer-mcp",
+  "name": "@store-mcp/play-operate",
   "version": "0.2.0",
-  "mcpName": "io.github.devinwang/google-play-developer-mcp",
-  "description": "Complete Model Context Protocol (MCP) server for Google Play — 157 tools, full Android Publisher API v3 + Play Developer Reporting v1beta1. Edits, store listings, monetization, in-app purchases, subscriptions, reviews, orders, crash/ANR/error reporting. Works with Claude, Cursor, VS Code, Codex, Gemini CLI, Windsurf, or any MCP client.",
+  "description": "[fork] Complete Model Context Protocol (MCP) server for Google Play \u2014 157 tools, full Android Publisher API v3 + Play Developer Reporting v1beta1. Edits, store listings, monetization, in-app purchases, subscriptions, reviews, orders, crash/ANR/error reporting. Works with Claude, Cursor, VS Code, Codex, Gemini CLI, Windsurf, or any MCP client.",
   "keywords": [
     "mcp",
     "mcp-server",
@@ -43,9 +42,9 @@
   "license": "MIT",
   "author": "",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/overlay/index.js",
   "bin": {
-    "google-play-developer-mcp": "dist/index.js"
+    "play-operate": "dist/overlay/index.js"
   },
   "files": [
     "dist/",
@@ -61,15 +60,14 @@
     "postbuild": "chmod +x dist/index.js",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "googleapis": "^187.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@store-mcp/shared": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
