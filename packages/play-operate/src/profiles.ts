@@ -8,8 +8,8 @@ export type PlayProfile = (typeof PLAY_PROFILES)[number];
 
 const RULES: Array<[string[], string[]]> = [
   [["apps_", "accounts_", "auth_"], ["apps"]],
-  [["edits_", "tracks_", "bundles_", "apks_", "testers_", "device_tier_", "app_recovery", "generated_apks", "system_apks", "internal_app_sharing", "deobfuscation_"], ["release"]],
-  [["listings_", "images_", "details_", "country_availability_"], ["listings"]],
+  [["edits_", "tracks_", "bundles_", "apks_", "testers_", "device_tier_", "app_recovery", "generated_apks", "system_apks", "internal_app_sharing", "deobfuscation_", "deploy_", "create_release", "promote_release", "update_rollout", "halt_rollout"], ["release"]],
+  [["listings_", "images_", "details_", "country_availability_", "aso_audit_", "metadata_dry_run_"], ["listings"]],
   [["reviews_"], ["reviews"]],
   [["onetime_products_", "subscriptions_", "subscription_", "purchases_", "orders_", "external_transactions_", "monetization_"], ["monetization"]],
   [["reports_"], ["vitals"]],

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "npm run build --workspace @store-mcp/shared && npm run build --workspace @store-mcp/play-operate && npm run build --workspace @store-mcp/appstore-operate",
     "clean": "rm -rf packages/*/dist",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && python3 -m unittest discover -s packages/play-analytics -p \"test_*.py\"",
     "typecheck": "npm run typecheck --workspace @store-mcp/shared && npm run typecheck --workspace @store-mcp/play-operate && npm run typecheck --workspace @store-mcp/appstore-operate"
   },
   "version": "0.1.0",

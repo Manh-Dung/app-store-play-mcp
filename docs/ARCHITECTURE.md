@@ -67,24 +67,20 @@ có contributor khác, release cadence khác hẳn, hoặc license khác.
 Lúc đó tách bằng cách lấy nguyên thư mục `packages/<tên>` ra —
 ranh giới package đã có sẵn nên việc tách là cơ học, không phải refactor.
 
-## TODO (chưa làm — ghi rõ, không giả vờ đã có)
+## Đã hoàn thành (Implemented)
 
-1. **Composite `deploy_app` 1-shot** (ý tưởng antoniolg/play-store-mcp):
-   upload bundle + chọn track + release notes + rollout trong 1 tool.
-   File sẽ làm: `packages/play-operate/src/tools/deploy.ts` (mới) +
-   đăng ký trong `src/tools/index.ts`. Chưa có file này.
-2. **ASO audit kiểu fil-technology/appstore-api-mcp**: audit toàn portfolio
-   (keyword trống, thiếu subtitle, listing 1 locale, thiếu screenshot),
-   dry-run diff old → new.
-   File sẽ làm: `packages/appstore-operate/src/tools/as-audit.ts` (mới)
-   + `packages/play-operate/src/tools/aso-audit.ts` (mới). Chưa có.
-3. **Beta feedback kiểu testflight-mcp (OrellBuehler)**:
-   screenshot feedback, crash feedback/logs, tester/groups.
-   App Store đã có 1 phần qua generated tools (`beta_feedback_*`),
-   nhưng chưa có tool tổng hợp "tóm tắt feedback của build X".
-   File sẽ làm: `packages/appstore-operate/src/tools/beta-feedback.ts` (mới). Chưa có.
-4. **PostgreSQL snapshot daily** (phase 2): chỉ làm khi cần so sánh trend
-   xuyên store theo ngày/tuần. Không làm trước — xem `docs/METRICS.md`.
-5. **Test cho operate servers**: hiện chỉ có test cho `packages/shared`.
-   Upstream devinwang vốn không có unit test; cần thêm test cho
-   `profileForTool` + `filterTools` ở mỗi operate server khi sửa tiếp.
+1. **Composite `deploy_app` 1-shot & Release Lifecycle** (`packages/play-operate/src/composite/`):
+   Upload bundle/APK, chọn track, release notes, rollout % và commit trong 1 tool kèm auto-rollback khi lỗi.
+2. **ASO audit & Dry-run diff** (`packages/shared/src/aso-rules.ts`, `packages/appstore-operate/src/composite/aso-audit.ts`, `packages/play-operate/src/composite/aso-audit.ts`):
+   Audit toàn portfolio (thiếu subtitle, keyword, screenshot), dry-run diff old → new kèm kiểm tra giới hạn ký tự.
+3. **Beta feedback & Crash diagnostics** (`packages/appstore-operate/src/composite/beta-feedback.ts`):
+   Tổng hợp screenshot feedback, crash reports và phân loại ưu tiên (Blocker/Bug/Usability).
+4. **Tool Budget Limiter & Two-Phase Confirmation** (`packages/shared/`):
+   Cờ `--max-tools N` và mã xác nhận `CONF-XXXXXXXX` (TTL 10 phút, single-use, hash payload) cho các thao tác phá hoại.
+5. **Google Discovery Codegen** (`packages/play-operate/scripts/codegen.ts`):
+   Tự động sinh 147 API tools tầng thấp từ Discovery Doc v3.
+6. **Bộ test tự động**: Đầy đủ unit tests cho cả 4 packages (`shared`: 15, `play-operate`: 10, `appstore-operate`: 4, `play-analytics`: 4) đạt 33/33 pass.
+
+## Lộ trình Phase 2 (Khi có nhu cầu)
+
+- **PostgreSQL snapshot daily**: Chỉ làm khi cần lưu trữ snapshot và đối chiếu trend xuyên store theo ngày/tuần dài hạn — xem `docs/METRICS.md`.

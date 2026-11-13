@@ -57,7 +57,10 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "node --test dist/**/*.test.js",
     "postbuild": "chmod +x dist/index.js",
+    "codegen": "node --import tsx scripts/codegen.ts",
+    "spec:download": "node --import tsx scripts/download-discovery.ts",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -71,6 +74,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

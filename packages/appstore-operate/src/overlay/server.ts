@@ -11,7 +11,14 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { allTools } from "../tools/index.js";
-import { filterTools, destructiveGate, translateError } from "@store-mcp/shared";
+import { compositeTools } from "../composite/index.js";
+import {
+  filterTools,
+  destructiveGate,
+  translateError,
+  limitToolsByBudget,
+  createToolsSearchTool,
+} from "@store-mcp/shared";
 import { profileForTool } from "../profiles.js";
 
 function packageVersion(): string {
@@ -28,24 +35,44 @@ function packageVersion(): string {
 export interface ServerOptions {
   workers?: string[];
   readOnly?: boolean;
+  maxTools?: number;
 }
 
+const ALWAYS_KEEP = [
+  "accounts_list",
+  "accounts_current",
+  "accounts_add",
+  "accounts_remove",
+  "accounts_switch",
+  "accounts_update",
+  "auth_status",
+  "auth_revoke_cache",
+  "store_search_tools",
+];
+
+const PRIORITY_TOOLS = compositeTools.map((t) => t.name);
+
 export function createServer(options: ServerOptions = {}): Server {
-  const { tools: visibleTools, blocked } = filterTools(allTools, {
+  const combinedTools = [...compositeTools, ...allTools];
+
+  const { tools: filteredTools, blocked } = filterTools(combinedTools, {
     workers: options.workers,
     readOnly: options.readOnly,
     profileForTool,
-    alwaysKeep: [
-      "accounts_list",
-      "accounts_current",
-      "accounts_add",
-      "accounts_remove",
-      "accounts_switch",
-      "accounts_update",
-      "auth_status",
-      "auth_revoke_cache",
-    ],
+    alwaysKeep: ALWAYS_KEEP,
   });
+
+  const searchTool = createToolsSearchTool(combinedTools);
+  const toolsWithSearch = [searchTool, ...filteredTools];
+
+  const budgetResult = limitToolsByBudget(toolsWithSearch, {
+    maxTools: options.maxTools,
+    profileForTool,
+    alwaysKeep: ALWAYS_KEEP,
+    priorityTools: PRIORITY_TOOLS,
+  });
+  const visibleTools = budgetResult.tools;
+
   const blockedByName = new Map(blocked.map((b) => [b.name, b.reason]));
   const byName = new Map(visibleTools.map((t) => [t.name, t]));
 

@@ -6,12 +6,12 @@ import { parseServerArgs, helpText } from "@store-mcp/shared";
 import { APPSTORE_PROFILES } from "../profiles.js";
 
 async function main(): Promise<void> {
-  const { workers, readOnly, help } = parseServerArgs(process.argv.slice(2));
+  const { workers, readOnly, maxTools, help } = parseServerArgs(process.argv.slice(2));
   if (help) {
     process.stdout.write(helpText("@store-mcp/appstore-operate", [...APPSTORE_PROFILES]));
     process.exit(0);
   }
-  const server = createServer({ workers, readOnly });
+  const server = createServer({ workers, readOnly, maxTools });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

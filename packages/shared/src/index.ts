@@ -1,17 +1,15 @@
 /**
  * @store-mcp/shared — safety helpers shared by play-operate and
  * appstore-operate. Pure TypeScript, no dependencies, no credentials,
- * no network. Ideas grafted from OrellBuehler/play-console-mcp
- * (validate_only / destructive opt-in) and zelentsov-dev/asc-mcp
- * (--workers, --read-only, exact confirmation for deletes).
+ * no network.
  */
 
-export interface ToolLike {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  handle: (args: unknown) => Promise<unknown>;
-}
+export * from "./types.js";
+export * from "./confirmation.js";
+export * from "./tool-budget.js";
+export * from "./aso-rules.js";
+
+import type { ToolLike } from "./types.js";
 
 /** A tool is a write when its name carries a mutating verb. */
 const WRITE_PATTERNS = [
@@ -102,7 +100,8 @@ export function filterTools(
  * Destructive gate (Orell-style opt-in, asc-mcp-style confirmation).
  * Delete/remove/revoke tools are refused unless the caller either
  * sets STORE_MCP_ALLOW_DESTRUCTIVE=1 or passes { confirm: true } /
- * { confirmation: "<exact id>" } in the tool arguments.
+ * { confirmation: "<exact id>" } / { confirmationId: "<exact id>" }
+ * in the tool arguments.
  * Returns null when allowed, otherwise the error message to return.
  */
 export function destructiveGate(
@@ -117,6 +116,7 @@ export function destructiveGate(
     if (a.confirm === true) return null;
     if (typeof a.confirmation === "string" && a.confirmation.length > 0) return null;
     if (typeof a.confirm_id === "string" && a.confirm_id.length > 0) return null;
+    if (typeof a.confirmationId === "string" && a.confirmationId.length > 0) return null;
     // asc-mcp style: confirm_<resource>_id fields
     for (const [k, v] of Object.entries(a)) {
       if (k.startsWith("confirm_") && typeof v === "string" && v.length > 0) return null;
@@ -124,7 +124,7 @@ export function destructiveGate(
   }
   return (
     `Refused destructive tool "${name}": set STORE_MCP_ALLOW_DESTRUCTIVE=1 ` +
-    `or pass { "confirm": true } (or a confirm_*_id) in the tool arguments. ` +
+    `or pass { "confirm": true } (or a confirm_*_id / confirmationId) in the tool arguments. ` +
     `This gate exists so a mis-prompted agent cannot delete store data.`
   );
 }
@@ -172,39 +172,50 @@ export function translateError(err: unknown): string {
   return msg;
 }
 
-/** Parse --workers / --read-only / --help from argv + env. */
+/** Parse --workers / --read-only / --max-tools / --help from argv + env. */
 export function parseServerArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): {
   workers: string[];
   readOnly: boolean;
+  maxTools?: number;
   help: boolean;
 } {
   const workers: string[] = [];
   let readOnly = env.STORE_MCP_READ_ONLY === "1" || env.STORE_MCP_READ_ONLY === "true";
+  let maxTools = env.STORE_MCP_MAX_TOOLS ? parseInt(env.STORE_MCP_MAX_TOOLS, 10) : undefined;
   let help = false;
+
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") help = true;
     else if (a === "--read-only") readOnly = true;
     else if (a === "--workers" && argv[i + 1]) workers.push(...argv[++i].split(","));
     else if (a.startsWith("--workers=")) workers.push(...a.slice("--workers=".length).split(","));
+    else if (a === "--max-tools" && argv[i + 1]) maxTools = parseInt(argv[++i], 10);
+    else if (a.startsWith("--max-tools=")) maxTools = parseInt(a.slice("--max-tools=".length), 10);
   }
   if (env.STORE_MCP_WORKERS) workers.push(...env.STORE_MCP_WORKERS.split(","));
-  return { workers: workers.map((w) => w.trim()).filter(Boolean), readOnly, help };
+  return {
+    workers: workers.map((w) => w.trim()).filter(Boolean),
+    readOnly,
+    maxTools: maxTools && !isNaN(maxTools) && maxTools > 0 ? maxTools : undefined,
+    help,
+  };
 }
 
 export function helpText(serverName: string, profiles: string[]): string {
   return [
     `${serverName} — MCP server (fork, see README-FORK.md)`,
     ``,
-    `Usage: node dist/index.js [--workers a,b] [--read-only] [--help]`,
+    `Usage: node dist/index.js [--workers a,b] [--read-only] [--max-tools N] [--help]`,
     ``,
     `  --workers <list>   Only expose tools in these profiles: ${profiles.join(", ")}, or "full"`,
     `  --read-only        Block every write tool (server-enforced, like asc-mcp --read-only)`,
+    `  --max-tools <num>  Limit number of registered tools to prevent context bloat (default: no limit unless set)`,
     `  --help             Show this help and exit (no credentials needed)`,
     ``,
-    `Env: STORE_MCP_WORKERS, STORE_MCP_READ_ONLY=1, STORE_MCP_ALLOW_DESTRUCTIVE=1`,
+    `Env: STORE_MCP_WORKERS, STORE_MCP_READ_ONLY=1, STORE_MCP_MAX_TOOLS=N, STORE_MCP_ALLOW_DESTRUCTIVE=1`,
     `Destructive tools (delete/remove/revoke) also need STORE_MCP_ALLOW_DESTRUCTIVE=1`,
-    `or { "confirm": true } in the tool call, unless in read-only mode (then blocked).`,
+    `or { "confirm": true } / confirmationId in the tool call, unless in read-only mode (then blocked).`,
     ``,
   ].join("\n");
 }

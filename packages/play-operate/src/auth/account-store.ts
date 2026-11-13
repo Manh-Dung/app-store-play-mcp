@@ -52,8 +52,14 @@ export function saveAccounts(store: AccountsFile): void {
 
 export function getCurrentAccount(): Account | null {
   const store = loadAccounts();
-  if (!store.currentAccount) return null;
-  return store.accounts[store.currentAccount] ?? null;
+  if (store.currentAccount && store.accounts[store.currentAccount]) {
+    return store.accounts[store.currentAccount];
+  }
+  const envKey = process.env.PLAY_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (envKey && fs.existsSync(envKey)) {
+    return { name: "env-default", keyFile: envKey };
+  }
+  return null;
 }
 
 export function requireCurrentAccount(): Account {

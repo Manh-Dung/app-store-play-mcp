@@ -1,95 +1,106 @@
-# store-mcp — 1 repo, 3 MCP servers (Play + App Store)
+# store-mcp — Unified MCP for Google Play & Apple App Store
 
-Monorepo MCP để quản lý app trên Google Play và App Store bằng AI agent.
-**1 repo, 3 server riêng, 3 process riêng** — không gộp thành 1 server,
-vì auth, API và quyền của 3 server khác nhau hoàn toàn.
+Monorepo Model Context Protocol (MCP) toàn diện để quản lý, phát hành và phân tích ứng dụng trên cả Google Play và Apple App Store.
 
-| Server | Package | Nền | Ngôn ngữ | Tools (upstream) | Ghi |
-|---|---|---|---|---|---|
-| play-operate | `packages/play-operate` | devinwang/google-play-developer-mcp | TypeScript | 157 | Release, listing, review, monetization, vitals |
-| play-analytics | `packages/play-analytics` | desunit/google-play-analytics-mcp | Python | 18 | **Chỉ đọc.** Installs, search terms, UTM, conversion |
-| appstore-operate | `packages/appstore-operate` | devinwang/app-store-connect-mcp | TypeScript | 1316 | Apps, builds, TestFlight, IAP, subscriptions, analytics, sales |
+**Kiến trúc:** 1 monorepo, **3 MCP server riêng biệt, 3 process độc lập** — đảm bảo cô lập rủi ro bảo mật khóa và phân quyền chuẩn xác:
+- **`play-operate`** (TypeScript): Quản lý phát hành, cấu hình track, danh sách cửa hàng, monetization và vitals cho Google Play.
+- **`appstore-operate`** (TypeScript): Quản lý TestFlight, build Xcode Cloud, nộp duyệt, ASO và quản lý danh mục App Store Connect.
+- **`play-analytics`** (Python, chỉ đọc): Phân tích lượt tải, từ khóa tìm kiếm, tỷ lệ chuyển đổi và lý do hủy gói từ Cloud Storage bulk reports.
+- **`@store-mcp/shared`** (TypeScript): Lớp an toàn dùng chung (Two-Phase Confirmation, Tool Budget Limiter, Quy tắc ASO, Redaction, Error Translation).
 
-Shared safety layer: `packages/shared` — xem `docs/ARCHITECTURE.md`.
+---
 
-> **Repo này không phải GitHub Fork.** Fork public thì không private được —
-> đây là repo mới + `git subtree --squash` từ 3 repo MIT (xem `docs/SYNC.md`
-> và `upstream-versions.json`). Target trên GitHub:
-> `github.com/Manh-Dung/app-store-play-mcp` — repo này hiện đang **PUBLIC,
-> trống, chưa push gì**; chốt visibility (public/private) trong Settings
-> trước khi push lần đầu.
+## Tính năng nổi bật đã tích hợp
 
-## Chạy
+| Phân hệ | Tính năng nổi bật | Tham chiếu kế thừa |
+|---|---|---|
+| **Play Operate** | - **Tool 1-shot `deploy_app`**: Upload AAB/APK, gán track, release notes, rollout % và commit trong 1 lần gọi.<br>- **Release Lifecycle**: `create_release`, `promote_release`, `update_rollout`, `halt_rollout` kèm chế độ dry-run `validateOnly`.<br>- **Atomic Rollback**: Tự động gọi `edits.delete` dọn sạch phiên edit khi gặp lỗi, không làm rác Play Console.<br>- **Google Discovery Codegen**: Script `npm run codegen` đọc Discovery doc v3 tự sinh 147 API tools tầng thấp. | OrellBuehler + antoniolg |
+| **App Store Operate** | - **TestFlight Beta Feedback**: Tool `testflight_feedback_summary` tự động gom và phân loại feedback tester (Blocker, Bug, Usability).<br>- **Crash Diagnostics**: Tool `testflight_crash_reports` phân tích phân bổ thiết bị, phiên bản OS và thời gian uptime.<br>- **OpenAPI Codegen**: Tự động sinh hơn 1300 tools từ Apple OpenAPI spec v4.6. | OrellBuehler + testflight-mcp |
+| **ASO & Dry-Run** | - **Cross-Platform ASO Audit**: Tool `aso_audit_portfolio` (App Store) và `aso_audit_app` (Play) quét tự động thiếu subtitle, thiếu keyword, thiếu screenshot theo kích cỡ.<br>- **Metadata Preview Diff**: Tool `metadata_dry_run_preview` kiểm tra trần ký tự (Title 30, Subtitle 30, Keywords 100, Short Desc 80) và hiển thị diff cũ vs mới. | fil-technology |
+| **Play Analytics** | - **Data Coverage Block**: Mọi truy vấn kèm thông số `data_through`, `lag_days`, `missing_dates` để AI không so sánh sai dải ngày.<br>- **Cache Revalidation**: Tự kiểm tra ETag và timestamp `updated` từ GCS để luôn phục vụ file báo cáo mới nhất. | desunit |
+| **Safety & Budgeting** | - **Worker Profiles (`--workers`)**: Thu gọn danh mục tool theo ngữ cảnh công việc.<br>- **Tool Budget Limiter (`--max-tools N`)**: Áp trần tool tránh tràn context window của LLM.<br>- **Two-Phase Confirmation Token**: Khóa `CONF-XXXXXXXX` (TTL 10 phút, single-use, băm payload) cho các thao tác xóa/dừng khẩn cấp.<br>- **Meta-tool `store_search_tools`**: Cho phép AI tự tìm kiếm tool bị cắt tỉa theo từ khóa. | asc-mcp |
 
+---
+
+## Cài đặt và Kiểm thử
+
+### 1. Build Monorepo (Node.js 18+)
 ```bash
-npm install          # root workspaces (TS packages)
-npm run build        # build shared + 2 package TS
-npm run typecheck
+npm install
+npm run build
+npm test
+```
+*Lệnh `npm test` tự động chạy toàn bộ 33 test cases qua cả TypeScript workspaces và Python analytics.*
 
-# Play analytics (Python, riêng)
+### 2. Thiết lập Play Analytics (Python 3.11+)
+```bash
 cd packages/play-analytics
-python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-python3 -m py_compile server.py gp_client.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 -m unittest discover -s . -p "test_*.py"
 ```
 
-Mỗi server có `--help` (không cần credential):
+---
 
-```bash
-node packages/play-operate/dist/overlay/index.js --help
-node packages/appstore-operate/dist/overlay/index.js --help
-```
+## Cấu hình MCP Client
 
-## Cấu hình
-
-Copy `.mcp.json.example` sang config của MCP client, thay
-`/ABSOLUTE/PATH/TO/...` bằng đường dẫn thật trên máy anh, và điền
-key/bucket theo `docs/SETUP.md`. **Không commit key thật, xem `.gitignore`.**
+Xem mẫu chi tiết tại file [`.mcp.json.example`](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/.mcp.json.example).
 
 ```json
 {
   "mcpServers": {
-    "play-operate":     { "command": "node", "args": ["<repo>/packages/play-operate/dist/overlay/index.js", "--workers", "release,reviews,listings"] },
-    "play-analytics":   { "command": "<repo>/packages/play-analytics/.venv/bin/python", "args": ["<repo>/packages/play-analytics/server.py"] },
-    "appstore-operate": { "command": "node", "args": ["<repo>/packages/appstore-operate/dist/overlay/index.js", "--workers", "apps,builds,testflight"] }
+    "play-operate": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/app-store-play-mcp/packages/play-operate/dist/overlay/index.js",
+        "--workers", "release,reviews,listings",
+        "--max-tools", "50"
+      ],
+      "env": {
+        "STORE_MCP_ALLOW_DESTRUCTIVE": "0",
+        "STORE_MCP_READ_ONLY": "0"
+      }
+    },
+    "appstore-operate": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/app-store-play-mcp/packages/appstore-operate/dist/overlay/index.js",
+        "--workers", "apps,builds,testflight,marketing",
+        "--max-tools", "50"
+      ],
+      "env": {
+        "STORE_MCP_ALLOW_DESTRUCTIVE": "0",
+        "STORE_MCP_READ_ONLY": "0"
+      }
+    },
+    "play-analytics": {
+      "command": "/ABSOLUTE/PATH/TO/app-store-play-mcp/packages/play-analytics/.venv/bin/python",
+      "args": [
+        "/ABSOLUTE/PATH/TO/app-store-play-mcp/packages/play-analytics/server.py"
+      ],
+      "env": {
+        "GOOGLE_PLAY_REPORTS_BUCKET": "pubsite_prod_rev_XXXXXXXXXXXXXXXX",
+        "GOOGLE_PLAY_SA_JSON": "/ABSOLUTE/PATH/TO/service-account.json"
+      }
+    }
   }
 }
 ```
 
-### Worker profiles (kiểu asc-mcp `--workers`)
+---
 
-Play operate: `apps, release, listings, reviews, monetization, vitals, full`
-App Store operate: `apps, builds, testflight, monetization, marketing, analytics, full`
+## Tài liệu chi tiết
 
-Ví dụ chỉ bật release + reviews cho Play:
+- [docs/WORKERS.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/WORKERS.md) — Chi tiết danh mục Worker Profiles, quản lý context window và cấu hình mẫu.
+- [docs/QUOTAS.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/QUOTAS.md) — Hạn mức gọi API (Rate limits), giới hạn ký tự và chính sách an toàn hai Store.
+- [docs/SETUP.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/SETUP.md) — Hướng dẫn tạo Service Account Google Play, file khóa `.p8` Apple và bucket GCS.
+- [docs/ARCHITECTURE.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/ARCHITECTURE.md) — Giải thích kiến trúc monorepo và lớp bảo vệ Overlay.
+- [docs/METRICS.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/METRICS.md) — Bảng đối chiếu và chuẩn hóa định nghĩa chỉ số giữa Play Store và App Store.
+- [docs/SYNC.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/SYNC.md) — Hướng dẫn đồng bộ mã nguồn từ các repo upstream qua `git subtree`.
 
-```bash
-node packages/play-operate/dist/overlay/index.js --workers release,reviews
-```
-
-### An toàn — đọc kỹ trước khi bật tool ghi
-
-- `--read-only` (hoặc `STORE_MCP_READ_ONLY=1`): chặn mọi tool ghi ở phía
-  server. ListTools không quảng cáo tool ghi, CallTool cũng từ chối.
-- Tool phá hoại (`delete` / `remove` / `revoke` / `clear`) cần thêm
-  `STORE_MCP_ALLOW_DESTRUCTIVE=1` hoặc `{ "confirm": true }` trong tool call.
-  Mặc định là **chặn**.
-- Key/service account chỉ cấp quyền tối thiểu — xem `docs/SETUP.md`.
-- Output được redact (JWT, Bearer token, PEM private key) trước khi trả về agent.
-- Play analytics không có tool ghi nào, service account chỉ cần quyền đọc bucket.
-
-## Docs
-
-- `docs/SETUP.md` — tạo service account Play, key App Store `.p8`, bucket GCS
-- `docs/ARCHITECTURE.md` — vì sao 1 repo / 3 server / 3 process
-- `docs/METRICS.md` — mapping metric Play vs App Store (không tương đương 1-1)
-- Mỗi package có `README-FORK.md` ghi nguồn gốc và thay đổi so với upstream.
-
-## Chưa làm (TODO)
-
-Xem `docs/ARCHITECTURE.md` mục TODO: composite `deploy_app` 1-shot kiểu
-antoniolg, ASO audit kiểu fil, beta feedback kiểu testflight-mcp.
-Những thứ này được ghi rõ là chưa làm, không giả vờ đã có.
+---
 
 ## License
 
-MIT — xem `LICENSE`. Upstream LICENSE được giữ nguyên trong từng package.
+MIT — xem chi tiết trong file `LICENSE`.
