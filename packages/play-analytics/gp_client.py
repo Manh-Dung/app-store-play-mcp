@@ -557,8 +557,6 @@ def _coverage(seen: set[date], start: date, end: date) -> dict:
     }
     if latest and latest < end.isoformat():
         cov["lag_days"] = (end - max(seen)).days
-    else:
-        cov["lag_days"] = 0 if latest else None
     if missing:
         interior = [d for d in missing if latest and d < latest]
         if interior:

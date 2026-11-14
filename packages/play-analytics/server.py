@@ -16,14 +16,11 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Any
 
-try:
-    from mcp.server.fastmcp import FastMCP
-    mcp = FastMCP("google-play-analytics")
-except ImportError:
-    class _MockFastMCP:
-        def tool(self, *args, **kwargs):
-            return lambda fn: fn
-    mcp = _MockFastMCP()
+from mcp.server.fastmcp import FastMCP
+
+import gp_client as gp
+
+mcp = FastMCP("google-play-analytics")
 
 MAX_ROWS = 200  # cap serialized rows to keep responses lean
 
@@ -449,6 +446,7 @@ def get_cancellation_reasons(package: str, start_date: str | None = None,
 
     top = _count(lambda r: " ".join((r.get("Response") or "").lower().split()))
     meta = _meta(res)
+    meta.pop("coverage", None)  # answers are event-driven; empty days are normal
     return {**meta, "columns": res["columns"],
             "rows_in_range_raw": raw_count, "row_count": len(rows),
             "deduped": dedupe,

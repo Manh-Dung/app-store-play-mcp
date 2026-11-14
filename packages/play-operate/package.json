@@ -57,7 +57,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test dist/**/*.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist/**/*.test.js",
     "postbuild": "chmod +x dist/index.js",
     "codegen": "node --import tsx scripts/codegen.ts",
     "spec:download": "node --import tsx scripts/download-discovery.ts",

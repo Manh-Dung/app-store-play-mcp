@@ -226,14 +226,42 @@ test("executeUpdateRollout increases user fraction to 100% and marks completed",
   assert.ok(mock.calls.includes("edits.commit:test-edit-999"));
 });
 
+import { createConfirmationToken } from "@store-mcp/shared";
+
 test("executeHaltRollout halts rollout with safety confirmation", async () => {
   const mock = createMockPublisher();
 
+  // Phase 1: Calling without confirmation token is rejected
+  await assert.rejects(
+    async () => {
+      await executeHaltRollout(
+        {
+          packageName: "com.example.app",
+          track: "production",
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mock as any,
+      );
+    },
+    { message: /Two-phase confirmation required/ },
+  );
+
+  // Phase 2: Create a valid confirmation token with matching payload and execute
+  const params = {
+    packageName: "com.example.app",
+    track: "production",
+  };
+
+  const token = createConfirmationToken({
+    action: "halt_rollout",
+    target: "com.example.app",
+    params,
+  });
+
   const result = await executeHaltRollout(
     {
-      packageName: "com.example.app",
-      track: "production",
-      confirm: true,
+      ...params,
+      confirmationId: token.confirmationId,
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mock as any,

@@ -10,39 +10,59 @@ export * from "./tool-budget.js";
 export * from "./aso-rules.js";
 
 import type { ToolLike } from "./types.js";
+import {
+  createConfirmationToken,
+  verifyAndConsumeConfirmationToken,
+} from "./confirmation.js";
 
-/** A tool is a write when its name carries a mutating verb. */
-const WRITE_PATTERNS = [
-  "_create", "_update", "_patch", "_delete", "_commit", "_upload",
-  "_insert", "_reply", "_refund", "_revoke", "_cancel", "_defer",
-  "_archive", "_activate", "_deactivate", "_consume", "_acknowledge",
-  "_promote", "_submit", "_publish", "_release", "_invite", "_remove",
-  "_expire", "_halt", "_deploy", "_migrate", "_convert", "_clear",
-  "_reorder", "_assign", "_set_", "_start_", "_stop_", "_add_",
-  "create_", "update_", "delete_", "upload_", "submit_", "revoke_",
-  "invite_", "remove_", "expire_",
+/** Verbs that denote a mutating or state-changing action. */
+const WRITE_VERBS = [
+  "create", "update", "patch", "delete", "commit", "upload",
+  "insert", "reply", "refund", "revoke", "cancel", "defer",
+  "archive", "activate", "deactivate", "consume", "acknowledge",
+  "promote", "submit", "publish", "release", "invite", "remove",
+  "expire", "halt", "deploy", "migrate", "convert", "clear",
+  "reorder", "assign", "set", "start", "stop", "add",
 ];
 
 export function isWriteTool(name: string): boolean {
   const n = name.toLowerCase();
   // Reads are explicit: list/get/search/query/status/fetch + helpers.
-  if (
-    /(^|_)(list|get|search|query|status|fetch|check|verify|validate|download|wait|current|preview|count|exists)($|_)/.test(n) &&
-    !WRITE_PATTERNS.some((p) => n.includes(p))
-  ) {
+  const isExplicitRead = /(^|_)(list|get|search|query|status|fetch|check|verify|validate|download|wait|current|preview|count|exists)($|_)/.test(n);
+
+  const hasWriteVerb = WRITE_VERBS.some(
+    (v) => n === v || n.startsWith(`${v}_`) || n.endsWith(`_${v}`) || n.includes(`_${v}_`),
+  );
+
+  if (isExplicitRead && !hasWriteVerb) {
     return false;
   }
-  return WRITE_PATTERNS.some((p) => n.includes(p));
+  return hasWriteVerb;
 }
 
-/** Destructive = delete / remove / revoke / clear / purge, plus delete-all. */
-export function isDestructiveTool(name: string): boolean {
+/** Destructive = delete / remove / revoke / clear / purge / halt, plus live production mutations. */
+export function isDestructiveTool(name: string, args?: unknown): boolean {
   const n = name.toLowerCase();
-  return (
+  if (
     n.includes("delete") || n.includes("remove") || n.includes("revoke") ||
     n.includes("clear") || n.includes("purge") || n.includes("destroy") ||
-    n.includes("delete_all") || n.includes("delete-all")
-  );
+    n.includes("halt") || n.includes("delete_all") || n.includes("delete-all")
+  ) {
+    return true;
+  }
+  // Modifications to live production track without validateOnly require confirmation
+  if (args && typeof args === "object") {
+    const a = args as Record<string, unknown>;
+    const track = a.track || a.toTrack;
+    if (
+      track === "production" &&
+      !a.validateOnly &&
+      (n.includes("deploy") || n.includes("release") || n.includes("promote"))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export interface FilterOptions {
@@ -97,36 +117,72 @@ export function filterTools(
 }
 
 /**
- * Destructive gate (Orell-style opt-in, asc-mcp-style confirmation).
- * Delete/remove/revoke tools are refused unless the caller either
- * sets STORE_MCP_ALLOW_DESTRUCTIVE=1 or passes { confirm: true } /
- * { confirmation: "<exact id>" } / { confirmationId: "<exact id>" }
- * in the tool arguments.
- * Returns null when allowed, otherwise the error message to return.
+ * Two-phase destructive gate.
+ * Destructive/high-risk actions require STORE_MCP_ALLOW_DESTRUCTIVE=1 or
+ * a verified, single-use confirmation token (generated in phase 1).
+ *
+ * Phase 1: Caller invokes tool without confirmationId.
+ *          Gate generates token (TTL 10 min, payload-bound) and refuses execution.
+ * Phase 2: Caller re-invokes tool with { confirmationId: "CONF-..." }.
+ *          Gate verifies and consumes token; allows execution if valid.
  */
 export function destructiveGate(
   name: string,
   args: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  if (!isDestructiveTool(name)) return null;
-  if (env.STORE_MCP_ALLOW_DESTRUCTIVE === "1" || env.STORE_MCP_ALLOW_DESTRUCTIVE === "true") return null;
-  if (args && typeof args === "object") {
-    const a = args as Record<string, unknown>;
-    if (a.confirm === true) return null;
-    if (typeof a.confirmation === "string" && a.confirmation.length > 0) return null;
-    if (typeof a.confirm_id === "string" && a.confirm_id.length > 0) return null;
-    if (typeof a.confirmationId === "string" && a.confirmationId.length > 0) return null;
-    // asc-mcp style: confirm_<resource>_id fields
-    for (const [k, v] of Object.entries(a)) {
-      if (k.startsWith("confirm_") && typeof v === "string" && v.length > 0) return null;
+  if (!isDestructiveTool(name, args)) return null;
+  if (env.STORE_MCP_ALLOW_DESTRUCTIVE === "1" || env.STORE_MCP_ALLOW_DESTRUCTIVE === "true") {
+    return null;
+  }
+
+  const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+
+  // Extract target identifier
+  const target = String(a.packageName || a.appId || a.id || a.track || a.toTrack || "global");
+
+  // Extract clean payload without token/confirm flags for deterministic hashing
+  const cleanParams: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(a)) {
+    if (
+      k !== "confirmationId" &&
+      k !== "confirmation" &&
+      k !== "confirm_id" &&
+      k !== "confirm" &&
+      !k.startsWith("confirm_")
+    ) {
+      cleanParams[k] = v;
     }
   }
-  return (
-    `Refused destructive tool "${name}": set STORE_MCP_ALLOW_DESTRUCTIVE=1 ` +
-    `or pass { "confirm": true } (or a confirm_*_id / confirmationId) in the tool arguments. ` +
-    `This gate exists so a mis-prompted agent cannot delete store data.`
-  );
+
+  // Look for confirmation token
+  const providedToken =
+    (typeof a.confirmationId === "string" && a.confirmationId.length > 0 ? a.confirmationId : null) ||
+    (typeof a.confirmation === "string" && a.confirmation.length > 0 ? a.confirmation : null) ||
+    (typeof a.confirm_id === "string" && a.confirm_id.length > 0 ? a.confirm_id : null) ||
+    (Object.entries(a).find(([k, v]) => k.startsWith("confirm_") && typeof v === "string" && (v as string).startsWith("CONF-"))?.[1] as string | null);
+
+  if (!providedToken) {
+    // Phase 1: Generate confirmation token and refuse execution
+    const tokenInfo = createConfirmationToken({
+      action: name,
+      target,
+      params: cleanParams,
+    });
+    return (
+      `Refused destructive tool "${name}": Two-phase confirmation required.\n` +
+      `${tokenInfo.prompt}\n` +
+      `Include { "confirmationId": "${tokenInfo.confirmationId}" } in tool arguments to proceed.`
+    );
+  }
+
+  // Phase 2: Verify and consume token
+  const verifyResult = verifyAndConsumeConfirmationToken(providedToken, name, target, cleanParams);
+  if (!verifyResult.valid) {
+    return `Refused destructive tool "${name}": Confirmation failed. ${verifyResult.reason}`;
+  }
+
+  return null; // Token verified and consumed; allow execution
 }
 
 /** Redact JWTs, Bearer tokens, PEM blocks and private-key fields from text. */

@@ -3,10 +3,20 @@
 
 import datetime
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+# Mock mcp fastmcp if not installed so test runs cleanly without altering server.py
+if "mcp" not in sys.modules:
+    mock_mcp = MagicMock()
+    mock_fastmcp = MagicMock()
+    mock_fastmcp.FastMCP = MagicMock(return_value=MagicMock(tool=lambda *a, **kw: lambda f: f))
+    sys.modules["mcp"] = mock_mcp
+    sys.modules["mcp.server"] = mock_mcp.server
+    sys.modules["mcp.server.fastmcp"] = mock_fastmcp
 
 import gp_client as gp
 import server
@@ -26,7 +36,7 @@ class TestAnalyticsCoverage(unittest.TestCase):
         cov = gp._coverage(seen, start, end)
 
         self.assertEqual(cov["data_through"], "2026-11-05")
-        self.assertEqual(cov["lag_days"], 0)
+        self.assertNotIn("lag_days", cov)
         self.assertEqual(cov["days_expected"], 5)
         self.assertEqual(cov["days_present"], 5)
         self.assertEqual(cov["missing_dates"], [])

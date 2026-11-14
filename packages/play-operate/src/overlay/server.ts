@@ -9,6 +9,7 @@
  * around upstream `allTools`, adding the shared filter:
  *  --workers profiles, --read-only, destructive gate, output redaction.
  */
+import fs from "node:fs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -24,6 +25,22 @@ import {
   createToolsSearchTool,
 } from "@store-mcp/shared";
 import { profileForTool } from "../profiles.js";
+import { getCurrentAccount, addAccount } from "../auth/account-store.js";
+
+function ensureEnvAccount(): void {
+  const envKey = process.env.PLAY_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (!getCurrentAccount() && envKey && fs.existsSync(envKey)) {
+    try {
+      addAccount({
+        name: "env-default",
+        keyFile: envKey,
+        description: "Auto-registered from environment variable",
+      });
+    } catch {
+      // Ignore if directory not writable
+    }
+  }
+}
 
 export interface ServerOptions {
   workers?: string[];
@@ -45,6 +62,7 @@ const ALWAYS_KEEP = [
 const PRIORITY_TOOLS = compositeTools.map((t) => t.name);
 
 export function createServer(options: ServerOptions = {}): Server {
+  ensureEnvAccount();
   const combinedTools = [...compositeTools, ...allTools];
 
   const { tools: filteredTools, blocked } = filterTools(combinedTools, {

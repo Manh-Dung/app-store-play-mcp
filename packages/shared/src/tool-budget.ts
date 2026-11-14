@@ -70,35 +70,28 @@ export function limitToolsByBudget<T extends ToolLike>(
     };
   }
 
-  // Step 3: Prioritize tools when budget is exceeded
+  // Step 3: Prioritize tools when budget is exceeded (alwaysKeep > priorityTools > general)
   const mustKeep: T[] = [];
-  const priorityList: T[] = [];
-  const generalList: T[] = [];
+  const rest: T[] = [];
 
   for (const tool of filtered) {
-    const name = tool.name.toLowerCase();
-    if (alwaysSet.has(name)) {
+    if (alwaysSet.has(tool.name.toLowerCase())) {
       mustKeep.push(tool);
-    } else if (prioritySet.has(name)) {
-      priorityList.push(tool);
     } else {
-      generalList.push(tool);
+      rest.push(tool);
     }
   }
 
-  const selected: T[] = [...mustKeep];
+  rest.sort((a, b) => {
+    const aPri = prioritySet.has(a.name.toLowerCase()) ? 0 : 1;
+    const bPri = prioritySet.has(b.name.toLowerCase()) ? 0 : 1;
+    return aPri - bPri;
+  });
 
-  for (const tool of priorityList) {
-    if (selected.length < maxTools) {
-      selected.push(tool);
-    }
-  }
-
-  for (const tool of generalList) {
-    if (selected.length < maxTools) {
-      selected.push(tool);
-    }
-  }
+  const selected: T[] = [
+    ...mustKeep,
+    ...rest.slice(0, Math.max(0, maxTools - mustKeep.length)),
+  ];
 
   return {
     tools: selected,

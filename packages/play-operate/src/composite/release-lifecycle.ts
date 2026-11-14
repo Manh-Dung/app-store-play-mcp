@@ -141,6 +141,30 @@ export const promoteReleaseInputSchema = z
   })
   .strict();
 
+export function selectActiveRelease(
+  releases: Array<Record<string, unknown>>,
+  preferredStatuses: string[] = ["completed", "inProgress", "draft"],
+): Record<string, unknown> {
+  if (!releases || releases.length === 0) {
+    throw new Error("No releases found on track.");
+  }
+  const getHighestVersionCode = (r: Record<string, unknown>): number => {
+    const codes = (r.versionCodes as string[] | number[]) ?? [];
+    return Math.max(0, ...codes.map((c) => Number(c) || 0));
+  };
+
+  const sorted = [...releases].sort((a, b) => {
+    const aStatusIdx = preferredStatuses.indexOf(String(a.status));
+    const bStatusIdx = preferredStatuses.indexOf(String(b.status));
+    const aRank = aStatusIdx === -1 ? 999 : aStatusIdx;
+    const bRank = bStatusIdx === -1 ? 999 : bStatusIdx;
+    if (aRank !== bRank) return aRank - bRank;
+    return getHighestVersionCode(b) - getHighestVersionCode(a);
+  });
+
+  return sorted[0]!;
+}
+
 export async function executePromoteRelease(
   input: z.infer<typeof promoteReleaseInputSchema>,
   client?: androidpublisher_v3.Androidpublisher,
@@ -154,12 +178,12 @@ export async function executePromoteRelease(
   try {
     // Read source track releases
     const sourceTrackRes = await pub.edits.tracks.get({ packageName, editId, track: fromTrack });
-    const sourceReleases = sourceTrackRes.data.releases ?? [];
+    const sourceReleases = (sourceTrackRes.data.releases ?? []) as Array<Record<string, unknown>>;
     if (sourceReleases.length === 0) {
       throw new Error(`No active releases found on source track "${fromTrack}".`);
     }
 
-    const latestRelease = sourceReleases[0];
+    const latestRelease = selectActiveRelease(sourceReleases, ["completed", "inProgress", "draft"]);
     const versionCodes = input.versionCodes ?? (latestRelease.versionCodes as string[]);
     if (!versionCodes || versionCodes.length === 0) {
       throw new Error(`Could not resolve versionCodes to promote from track "${fromTrack}".`);
@@ -255,12 +279,12 @@ export async function executeUpdateRollout(
 
   try {
     const trackRes = await pub.edits.tracks.get({ packageName, editId, track });
-    const releases = trackRes.data.releases ?? [];
+    const releases = (trackRes.data.releases ?? []) as Array<Record<string, unknown>>;
     if (releases.length === 0) {
       throw new Error(`No active release found on track "${track}".`);
     }
 
-    const current = releases[0];
+    const current = selectActiveRelease(releases, ["inProgress", "draft", "completed"]);
     let status = "inProgress";
     if (userFraction >= 1.0) {
       status = "completed";
@@ -352,12 +376,12 @@ export async function executeHaltRollout(
 
   try {
     const trackRes = await pub.edits.tracks.get({ packageName, editId, track });
-    const releases = trackRes.data.releases ?? [];
+    const releases = (trackRes.data.releases ?? []) as Array<Record<string, unknown>>;
     if (releases.length === 0) {
       throw new Error(`No active release found on track "${track}".`);
     }
 
-    const current = releases[0];
+    const current = selectActiveRelease(releases, ["inProgress", "draft", "completed"]);
     const updatedRelease: Record<string, unknown> = {
       ...current,
       status: "halted",

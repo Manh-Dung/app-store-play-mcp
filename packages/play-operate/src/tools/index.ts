@@ -15,8 +15,9 @@ import { reviewTools } from "./reviews.js";
 import { userTools } from "./users.js";
 import { distributionTools } from "./distribution.js";
 import { reportTools } from "./reports.js";
+import { allGeneratedTools } from "./generated/index.js";
 
-export const allTools: Tool[] = [
+const handwrittenTools: Tool[] = [
   ...accountTools,
   ...authTools,
   ...appsTools,
@@ -33,6 +34,17 @@ export const allTools: Tool[] = [
   ...userTools,
   ...distributionTools,
   ...reportTools,
+];
+
+// Deduplication policy: handwritten tools have priority and shadow generated tools with the same name.
+const handwrittenNames = new Set(handwrittenTools.map((t) => t.name));
+export const uniqueGeneratedTools: Tool[] = allGeneratedTools.filter(
+  (t) => !handwrittenNames.has(t.name),
+);
+
+export const allTools: Tool[] = [
+  ...handwrittenTools,
+  ...uniqueGeneratedTools,
 ];
 
 export function toolByName(name: string): Tool | undefined {
