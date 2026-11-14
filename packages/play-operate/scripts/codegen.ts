@@ -21,6 +21,49 @@ const ROOT = path.resolve(__dirname, "..");
 const SPEC_FILE = path.join(ROOT, "spec/androidpublisher-v3-discovery.json");
 const OUT_DIR = path.join(ROOT, "src/tools/generated");
 
+const isDryRun = process.argv.includes("--dry-run");
+const showDiff = process.argv.includes("--diff");
+
+interface WriteStats {
+  created: number;
+  modified: number;
+  unchanged: number;
+}
+
+function safeWrite(filePath: string, content: string, stats: WriteStats): void {
+  const rel = path.relative(ROOT, filePath);
+  if (!fs.existsSync(filePath)) {
+    stats.created++;
+    if (isDryRun) {
+      process.stdout.write(`[codegen][dry-run] Would create: ${rel}\n`);
+    } else {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf8");
+      process.stdout.write(`[codegen] Created: ${rel}\n`);
+    }
+    return;
+  }
+
+  const existing = fs.readFileSync(filePath, "utf8");
+  if (existing === content) {
+    stats.unchanged++;
+    return;
+  }
+
+  stats.modified++;
+  if (showDiff) {
+    process.stdout.write(
+      `[codegen][diff] ${rel} changed (${existing.length} bytes -> ${content.length} bytes)\n`,
+    );
+  }
+  if (isDryRun) {
+    process.stdout.write(`[codegen][dry-run] Would update: ${rel}\n`);
+  } else {
+    fs.writeFileSync(filePath, content, "utf8");
+    process.stdout.write(`[codegen] Updated: ${rel}\n`);
+  }
+}
+
 function zodTypeForParam(p: DiscoveryParameter): string {
   let expr: string;
   if (p.enum && p.enum.length > 0) {
@@ -84,7 +127,11 @@ async function main(): Promise<void> {
   const methods = parseDiscoveryDoc(raw);
   process.stdout.write(`[codegen] Found ${methods.length} methods across resources.\n`);
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  if (!isDryRun) {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+  }
+
+  const stats: WriteStats = { created: 0, modified: 0, unchanged: 0 };
 
   // Group by top-level resource name
   const groups = new Map<string, ParsedMethod[]>();
@@ -117,7 +164,7 @@ ${toolBlocks}
 ];
 `;
 
-    fs.writeFileSync(path.join(OUT_DIR, fileName), content, "utf8");
+    safeWrite(path.join(OUT_DIR, fileName), content, stats);
     fileExports.push(`export { ${varName} } from "./${groupName}.js";`);
   }
 
@@ -142,9 +189,9 @@ ${groupNames
 ];
 `;
 
-  fs.writeFileSync(path.join(OUT_DIR, "index.ts"), indexContent, "utf8");
+  safeWrite(path.join(OUT_DIR, "index.ts"), indexContent, stats);
   process.stdout.write(
-    `[codegen] Emitted ${groups.size} tool modules + index.ts (${methods.length} total tools) into ${OUT_DIR}\n`,
+    `[codegen] ${isDryRun ? "[DRY RUN] " : ""}Finished: ${stats.created} created, ${stats.modified} modified, ${stats.unchanged} unchanged (${methods.length} total tools in ${groups.size} modules)\n`,
   );
 }
 

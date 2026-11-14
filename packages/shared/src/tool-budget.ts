@@ -100,15 +100,33 @@ export function limitToolsByBudget<T extends ToolLike>(
   };
 }
 
+export interface BudgetStatusInfo {
+  truncated: boolean;
+  loadedCount: number;
+  totalAvailable: number;
+}
+
 /**
  * Meta-tool: allows the Agent to search and discover tools dynamically
- * across the entire 1300+ catalog when a tool was omitted due to budget limits.
+ * across the entire catalog when tools were omitted due to budget limits.
+ * Surfacing truncation status directly in the description and output alerts
+ * the agent when low-level tools are omitted.
  */
-export function createToolsSearchTool(allTools: ToolLike[]): ToolLike {
+export function createToolsSearchTool(
+  allTools: ToolLike[],
+  budgetInfo?: BudgetStatusInfo,
+): ToolLike {
+  const isTruncated = Boolean(budgetInfo?.truncated);
+  const loaded = budgetInfo?.loadedCount ?? allTools.length;
+  const total = budgetInfo?.totalAvailable ?? allTools.length;
+
+  const desc = isTruncated
+    ? `[TOOL BUDGET TRUNCATION ACTIVE: ${loaded}/${total} tools currently loaded]. Search the complete tool registry by keyword (in tool name or description) to discover and inspect any of the ${total - loaded} auxiliary tools omitted from the active context window.`
+    : "Search the complete tool registry by keyword (in tool name or description). Use this to discover specific low-level or auxiliary tools not currently loaded in the active context window.";
+
   return {
     name: "store_search_tools",
-    description:
-      "Search the complete tool registry by keyword (in tool name or description). Use this to discover specific low-level or auxiliary tools not currently loaded in the active context window.",
+    description: desc,
     inputSchema: {
       type: "object",
       properties: {
@@ -132,6 +150,14 @@ export function createToolsSearchTool(allTools: ToolLike[]): ToolLike {
         query,
         count: capped.length,
         totalFound: matches.length,
+        budgetStatus: {
+          truncated: isTruncated,
+          loadedCount: loaded,
+          totalCatalog: total,
+          notice: isTruncated
+            ? `Notice: Client context budget limit is active. ${loaded} of ${total} total tools are loaded in tools/list. ${total - loaded} auxiliary tools were truncated and can be discovered here.`
+            : `All ${total} tools are loaded in context.`,
+        },
         tools: capped.map((t) => ({
           name: t.name,
           description: t.description,

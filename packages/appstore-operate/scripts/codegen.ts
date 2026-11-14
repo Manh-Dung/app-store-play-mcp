@@ -29,6 +29,49 @@ const SPEC_PATH = path.join(ROOT, "spec/app-store-connect-openapi.json");
 const OUT_DIR = path.join(ROOT, "src/tools/generated");
 const COVERAGE_OUT = path.join(ROOT, "spec/coverage-report.txt");
 
+const isDryRun = process.argv.includes("--dry-run");
+const showDiff = process.argv.includes("--diff");
+
+interface WriteStats {
+  created: number;
+  modified: number;
+  unchanged: number;
+}
+
+function safeWrite(filePath: string, content: string, stats: WriteStats): void {
+  const rel = path.relative(ROOT, filePath);
+  if (!fs.existsSync(filePath)) {
+    stats.created++;
+    if (isDryRun) {
+      process.stdout.write(`[codegen][dry-run] Would create: ${rel}\n`);
+    } else {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf8");
+      process.stdout.write(`[codegen] Created: ${rel}\n`);
+    }
+    return;
+  }
+
+  const existing = fs.readFileSync(filePath, "utf8");
+  if (existing === content) {
+    stats.unchanged++;
+    return;
+  }
+
+  stats.modified++;
+  if (showDiff) {
+    process.stdout.write(
+      `[codegen][diff] ${rel} changed (${existing.length} bytes -> ${content.length} bytes)\n`,
+    );
+  }
+  if (isDryRun) {
+    process.stdout.write(`[codegen][dry-run] Would update: ${rel}\n`);
+  } else {
+    fs.writeFileSync(filePath, content, "utf8");
+    process.stdout.write(`[codegen] Updated: ${rel}\n`);
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
@@ -447,11 +490,9 @@ async function main(): Promise<void> {
   const raw = fs.readFileSync(SPEC_PATH, "utf8");
   const spec = JSON.parse(raw) as OpenApiSpec;
 
-  // Clean generated dir.
-  if (fs.existsSync(OUT_DIR)) {
-    fs.rmSync(OUT_DIR, { recursive: true, force: true });
+  if (!isDryRun) {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
   }
-  fs.mkdirSync(OUT_DIR, { recursive: true });
 
   interface ToolSpec {
     name: string;
@@ -529,13 +570,19 @@ async function main(): Promise<void> {
     );
   }
 
+  const stats: WriteStats = { created: 0, modified: 0, unchanged: 0 };
+
   // Emit one file per tag.
   const tagFiles: Array<{ tag: string; file: string; varName: string }> = [];
+  const expectedFileNames = new Set<string>(["index.ts"]);
+
   for (const [tag, tools] of Object.entries(byTag)) {
     const fileStem = tagToFilename(tag);
+    const fileName = `${fileStem}.ts`;
+    expectedFileNames.add(fileName);
     const varName =
       fileStem.replace(/-([a-z])/g, (_, c) => c.toUpperCase()) + "Tools";
-    const filePath = path.join(OUT_DIR, `${fileStem}.ts`);
+    const filePath = path.join(OUT_DIR, fileName);
     const body = tools
       .map(
         (t) => `  defineTool({
@@ -561,7 +608,7 @@ export const ${varName}: Tool[] = [
 ${body}
 ];
 `;
-    fs.writeFileSync(filePath, src);
+    safeWrite(filePath, src, stats);
     tagFiles.push({ tag, file: fileStem, varName });
   }
 
@@ -577,7 +624,22 @@ export const generatedTools: Tool[] = [
 ${tagFiles.map((t) => `  ...${t.varName},`).join("\n")}
 ];
 `;
-  fs.writeFileSync(path.join(OUT_DIR, "index.ts"), indexSrc);
+  safeWrite(path.join(OUT_DIR, "index.ts"), indexSrc, stats);
+
+  // Clean any stale files in OUT_DIR
+  if (fs.existsSync(OUT_DIR)) {
+    for (const f of fs.readdirSync(OUT_DIR)) {
+      if (!expectedFileNames.has(f)) {
+        const stalePath = path.join(OUT_DIR, f);
+        if (isDryRun) {
+          process.stdout.write(`[codegen][dry-run] Would delete stale: ${f}\n`);
+        } else {
+          fs.unlinkSync(stalePath);
+          process.stdout.write(`[codegen] Deleted stale: ${f}\n`);
+        }
+      }
+    }
+  }
 
   // Coverage report.
   const sortedTags = Object.entries(byTag).sort(
@@ -602,8 +664,11 @@ ${tagFiles.map((t) => `  ...${t.varName},`).join("\n")}
       `| ${i + 1} | ${tag} | ${tools.length} | \`${tagToFilename(tag)}.ts\` |`,
     );
   });
-  fs.writeFileSync(COVERAGE_OUT, coverageLines.join("\n"));
+  safeWrite(COVERAGE_OUT, coverageLines.join("\n"), stats);
 
+  process.stdout.write(
+    `[codegen] ${isDryRun ? "[DRY RUN] " : ""}Finished: ${stats.created} created, ${stats.modified} modified, ${stats.unchanged} unchanged across ${sortedTags.length} tag modules\n`,
+  );
   process.stdout.write(
     `[codegen] Spec v${spec.info.version}: ${totalOps} ops → ${emittedTools} tools across ${sortedTags.length} files (${deprecatedCount} deprecated, ${skipped} skipped)\n`,
   );

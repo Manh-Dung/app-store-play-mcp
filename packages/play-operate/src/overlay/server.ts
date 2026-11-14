@@ -72,16 +72,20 @@ export function createServer(options: ServerOptions = {}): Server {
     alwaysKeep: ALWAYS_KEEP,
   });
 
-  const searchTool = createToolsSearchTool(combinedTools);
-  const toolsWithSearch = [searchTool, ...filteredTools];
-
-  const budgetResult = limitToolsByBudget(toolsWithSearch, {
+  const budgetResult = limitToolsByBudget(filteredTools, {
     maxTools: options.maxTools,
     profileForTool,
     alwaysKeep: ALWAYS_KEEP,
     priorityTools: PRIORITY_TOOLS,
   });
-  const visibleTools = budgetResult.tools;
+
+  const searchTool = createToolsSearchTool(combinedTools, {
+    truncated: budgetResult.truncated,
+    loadedCount: budgetResult.tools.length,
+    totalAvailable: budgetResult.totalAvailable,
+  });
+
+  const visibleTools = [searchTool, ...budgetResult.tools];
 
   const blockedByName = new Map(blocked.map((b) => [b.name, b.reason]));
   const byName = new Map(visibleTools.map((t) => [t.name, t]));

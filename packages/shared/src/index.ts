@@ -23,21 +23,70 @@ const WRITE_VERBS = [
   "promote", "submit", "publish", "release", "invite", "remove",
   "expire", "halt", "deploy", "migrate", "convert", "clear",
   "reorder", "assign", "set", "start", "stop", "add",
+  "rotate", "enroll", "schedule", "replace", "destroy", "purge",
+];
+
+const SUBSTRING_WRITE_VERBS = [
+  "delete", "refund", "upload", "create", "update", "patch",
+  "publish", "halt", "deploy", "promote", "rotate", "enroll",
+  "replace", "cancel", "schedule", "commit", "insert", "revoke",
+  "addexternallyhosted", "reviewrefund",
 ];
 
 export function isWriteTool(name: string): boolean {
   const n = name.toLowerCase();
-  // Reads are explicit: list/get/search/query/status/fetch + helpers.
-  const isExplicitRead = /(^|_)(list|get|search|query|status|fetch|check|verify|validate|download|wait|current|preview|count|exists)($|_)/.test(n);
 
-  const hasWriteVerb = WRITE_VERBS.some(
-    (v) => n === v || n.startsWith(`${v}_`) || n.endsWith(`_${v}`) || n.includes(`_${v}_`),
-  );
-
-  if (isExplicitRead && !hasWriteVerb) {
+  // App Store Connect standard GET endpoints are strictly read-only
+  if (/_get_(instance|collection|to_one_relationship|to_many_relationship|to_one_related|to_many_related)$/.test(n)) {
     return false;
   }
-  return hasWriteVerb;
+  // App Store Connect standard mutation endpoints are strictly write
+  if (/_(create|update|delete|replace)_(instance|to_one_relationship|to_many_relationship)$/.test(n)) {
+    return true;
+  }
+
+  // Pure search helper tools are read-only
+  if (n === "store_search_tools") {
+    return false;
+  }
+  // Google Play aso_audit_app opens an edit transaction session (edits.insert/delete) which modifies state and requires write permissions
+  if (n === "aso_audit_app") {
+    return true;
+  }
+  // Play Developer Reporting v1beta1 endpoints are strictly read-only metrics
+  if (n.startsWith("reports_")) {
+    return false;
+  }
+
+  // Tools with explicit read suffix
+  const parts = n.split("_");
+  const last = parts[parts.length - 1];
+  if (["get", "list", "query", "search", "status", "fetch", "check", "preview", "count", "exists", "download"].includes(last)) {
+    return false;
+  }
+
+  // Exact segment matching
+  for (const seg of parts) {
+    if (WRITE_VERBS.includes(seg)) {
+      return true;
+    }
+  }
+
+  // Concatenated / embedded write verbs in any segment
+  for (const seg of parts) {
+    for (const v of SUBSTRING_WRITE_VERBS) {
+      if (seg.includes(v)) {
+        return true;
+      }
+    }
+  }
+
+  // Composite action prefixes
+  if (n.startsWith("deploy_") || n.startsWith("halt_") || n.startsWith("promote_") || n.startsWith("create_")) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Destructive = delete / remove / revoke / clear / purge / halt, plus live production mutations. */

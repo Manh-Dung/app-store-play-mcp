@@ -52,20 +52,39 @@ test("searchTools filters by name and description keyword", () => {
   assert.equal(byName[0].name, "tracks_update");
 });
 
-test("createToolsSearchTool provides on-demand discovery", async () => {
+test("createToolsSearchTool provides on-demand discovery and surfaces budget truncation", async () => {
   const tools: ToolLike[] = [
     makeTool("apps_get", "Retrieve app details"),
     makeTool("tracks_update", "Update release tracks"),
   ];
 
-  const searchTool = createToolsSearchTool(tools);
-  assert.equal(searchTool.name, "store_search_tools");
+  // Without truncation
+  const searchTool1 = createToolsSearchTool(tools);
+  assert.equal(searchTool1.name, "store_search_tools");
+  assert.ok(!searchTool1.description.includes("TOOL BUDGET TRUNCATION ACTIVE"));
 
-  const res = (await searchTool.handle({ query: "release" })) as {
+  const res1 = (await searchTool1.handle({ query: "release" })) as {
     count: number;
     tools: Array<{ name: string; description: string }>;
+    budgetStatus?: { truncated: boolean; notice: string };
   };
+  assert.equal(res1.count, 1);
+  assert.equal(res1.budgetStatus?.truncated, false);
 
-  assert.equal(res.count, 1);
-  assert.equal(res.tools[0].name, "tracks_update");
+  // With truncation (S8: agent visibility)
+  const searchTool2 = createToolsSearchTool(tools, {
+    truncated: true,
+    loadedCount: 50,
+    totalAvailable: 294,
+  });
+  assert.ok(searchTool2.description.includes("TOOL BUDGET TRUNCATION ACTIVE: 50/294"));
+  assert.ok(searchTool2.description.includes("244 auxiliary tools omitted"));
+
+  const res2 = (await searchTool2.handle({ query: "release" })) as {
+    count: number;
+    budgetStatus?: { truncated: boolean; loadedCount: number; notice: string };
+  };
+  assert.equal(res2.budgetStatus?.truncated, true);
+  assert.equal(res2.budgetStatus?.loadedCount, 50);
+  assert.ok(res2.budgetStatus?.notice.includes("50 of 294 total tools are loaded"));
 });

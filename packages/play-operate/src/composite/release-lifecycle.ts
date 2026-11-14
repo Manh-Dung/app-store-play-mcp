@@ -3,7 +3,6 @@ import type { androidpublisher_v3 } from "googleapis";
 import { defineTool, type Tool } from "../utils/tool.js";
 import { publisher } from "../auth/client-factory.js";
 import { packageNameArg, trackArg } from "../utils/schemas.js";
-import { destructiveGate } from "@store-mcp/shared";
 import { formatReleaseLifecycleResult, type ReleaseLifecycleResult } from "./formatters.js";
 
 // ---------- 1. create_release ----------
@@ -363,11 +362,6 @@ export async function executeHaltRollout(
   input: z.infer<typeof haltRolloutInputSchema>,
   client?: androidpublisher_v3.Androidpublisher,
 ): Promise<ReleaseLifecycleResult> {
-  const gate = destructiveGate("halt_rollout", input);
-  if (gate) {
-    throw new Error(gate);
-  }
-
   const pub = client ?? (await publisher());
   const { packageName, track, validateOnly = false } = input;
 

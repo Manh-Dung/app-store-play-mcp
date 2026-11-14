@@ -122,6 +122,7 @@ export const playAsoAuditPortfolioSchema = z
 
 export interface PlayPortfolioAuditResult {
   reports: AsoAuditReport[];
+  failedPackages?: Array<{ package: string; error: string }>;
   averageScore: number;
   totalGaps: number;
   formattedMarkdown: string;
@@ -146,12 +147,16 @@ export async function executePlayAsoAuditPortfolio(
   }
 
   const reports: AsoAuditReport[] = [];
+  const failedPackages: Array<{ package: string; error: string }> = [];
   for (const pkg of targetPackages) {
     try {
       const rep = await executePlayAsoAudit(pkg, client);
       reports.push(rep);
-    } catch {
-      // Skip inaccessible packages
+    } catch (err) {
+      failedPackages.push({
+        package: pkg,
+        error: (err as Error).message || String(err),
+      });
     }
   }
 
@@ -191,8 +196,17 @@ export async function executePlayAsoAuditPortfolio(
     }
   }
 
+  if (failedPackages.length > 0) {
+    lines.push(``);
+    lines.push(`### Inaccessible / Failed Packages`);
+    for (const f of failedPackages) {
+      lines.push(`- \`${f.package}\`: ${f.error}`);
+    }
+  }
+
   return {
     reports,
+    failedPackages,
     averageScore,
     totalGaps,
     formattedMarkdown: lines.join("\n"),

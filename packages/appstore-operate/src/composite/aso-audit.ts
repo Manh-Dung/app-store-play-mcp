@@ -21,6 +21,7 @@ export const asoAuditInputSchema = z
 
 export interface PortfolioAuditResult {
   reports: AsoAuditReport[];
+  failedApps?: Array<{ appId: string; error: string }>;
   averageScore: number;
   totalGaps: number;
   formattedMarkdown: string;
@@ -36,108 +37,140 @@ export async function executeAsoAuditPortfolio(
   if (appId) {
     targetApps = [{ id: appId, name: appId, primaryLocale: "en-US" }];
   } else {
-    const appsRes = await requester({
-      method: "GET",
-      path: "/v1/apps",
-      query: { limit: 50 },
-    });
-    const apps = (appsRes.body?.data ?? []) as Array<{
-      id: string;
-      attributes?: { name?: string; primaryLocale?: string };
-    }>;
-    targetApps = apps.map((a) => ({
-      id: a.id,
-      name: a.attributes?.name ?? a.id,
-      primaryLocale: a.attributes?.primaryLocale ?? "en-US",
-    }));
+    let nextUrl: string | undefined = "/v1/apps";
+    let cursor: string | undefined = undefined;
+
+    while (nextUrl) {
+      const appsRes = await requester({
+        method: "GET",
+        path: "/v1/apps",
+        query: cursor ? { limit: 50, cursor } : { limit: 50 },
+      });
+      const apps = (appsRes.body?.data ?? []) as Array<{
+        id: string;
+        attributes?: { name?: string; primaryLocale?: string };
+      }>;
+      for (const a of apps) {
+        targetApps.push({
+          id: a.id,
+          name: a.attributes?.name ?? a.id,
+          primaryLocale: a.attributes?.primaryLocale ?? "en-US",
+        });
+      }
+      const next = (appsRes.body?.links as { next?: string } | undefined)?.next;
+      if (typeof next === "string" && next.includes("cursor=")) {
+        const u = new URL(next, "https://api.appstoreconnect.apple.com");
+        cursor = u.searchParams.get("cursor") ?? undefined;
+        nextUrl = cursor ? next : undefined;
+      } else {
+        nextUrl = undefined;
+      }
+      if (targetApps.length >= 200) break; // safety cap
+    }
   }
 
   const reports: AsoAuditReport[] = [];
+  const failedApps: Array<{ appId: string; error: string }> = [];
 
   for (const app of targetApps) {
-    const localesMap: AppMetadata["locales"] = {};
+    try {
+      const localesMap: AppMetadata["locales"] = {};
 
-    // 1. Fetch App Info and its Localizations (for Title & Subtitle)
-    const appInfoRes = await requester({
-      method: "GET",
-      path: "/v1/apps/{id}/appInfos",
-      pathParams: { id: app.id },
-      query: { limit: 5 },
-    });
-    const appInfos = (appInfoRes.body?.data ?? []) as Array<{ id: string }>;
-
-    for (const info of appInfos) {
-      const locRes = await requester({
+      // 1. Fetch App Info and its Localizations (for Title & Subtitle)
+      const appInfoRes = await requester({
         method: "GET",
-        path: "/v1/appInfos/{id}/appInfoLocalizations",
-        pathParams: { id: info.id },
-        query: { limit: 50 },
+        path: "/v1/apps/{id}/appInfos",
+        pathParams: { id: app.id },
+        query: { limit: 5 },
       });
-      const locs = (locRes.body?.data ?? []) as Array<{
-        attributes?: { locale?: string; name?: string; subtitle?: string };
-      }>;
-      for (const l of locs) {
-        const locCode = l.attributes?.locale ?? app.primaryLocale ?? "en-US";
-        localesMap[locCode] = {
-          ...localesMap[locCode],
-          title: l.attributes?.name ?? app.name,
-          subtitle: l.attributes?.subtitle ?? "",
-        };
-      }
-    }
+      const appInfos = (appInfoRes.body?.data ?? []) as Array<{ id: string }>;
 
-    // 2. Fetch App Store Versions & Version Localizations (for Keywords & Description)
-    const versionsRes = await requester({
-      method: "GET",
-      path: "/v1/apps/{id}/appStoreVersions",
-      pathParams: { id: app.id },
-      query: { limit: 5 },
-    });
-    const versions = (versionsRes.body?.data ?? []) as Array<{ id: string }>;
-
-    for (const ver of versions.slice(0, 1)) {
-      const vLocRes = await requester({
-        method: "GET",
-        path: "/v1/appStoreVersions/{id}/appStoreVersionLocalizations",
-        pathParams: { id: ver.id },
-        query: { limit: 50 },
-      });
-      const vLocs = (vLocRes.body?.data ?? []) as Array<{
-        id: string;
-        attributes?: { locale?: string; keywords?: string; description?: string };
-      }>;
-
-      for (const vl of vLocs) {
-        const locCode = vl.attributes?.locale ?? app.primaryLocale ?? "en-US";
-
-        // Check screenshots
-        const shotRes = await requester({
+      for (const info of appInfos) {
+        const locRes = await requester({
           method: "GET",
-          path: "/v1/appStoreVersionLocalizations/{id}/appScreenshotSets",
-          pathParams: { id: vl.id },
-          query: { limit: 10 },
+          path: "/v1/appInfos/{id}/appInfoLocalizations",
+          pathParams: { id: info.id },
+          query: { limit: 50 },
         });
-        const shotSets = (shotRes.body?.data ?? []) as unknown[];
-
-        localesMap[locCode] = {
-          ...localesMap[locCode],
-          keywords: vl.attributes?.keywords ?? "",
-          description: vl.attributes?.description ?? "",
-          hasScreenshots: shotSets.length > 0,
-          screenshotCount: shotSets.length,
-        };
+        const locs = (locRes.body?.data ?? []) as Array<{
+          attributes?: { locale?: string; name?: string; subtitle?: string };
+        }>;
+        for (const l of locs) {
+          const locCode = l.attributes?.locale ?? app.primaryLocale ?? "en-US";
+          localesMap[locCode] = {
+            ...localesMap[locCode],
+            title: l.attributes?.name ?? app.name,
+            subtitle: l.attributes?.subtitle ?? "",
+          };
+        }
       }
+
+      // 2. Fetch App Store Versions & Version Localizations (for Keywords & Description)
+      const versionsRes = await requester({
+        method: "GET",
+        path: "/v1/apps/{id}/appStoreVersions",
+        pathParams: { id: app.id },
+        query: { limit: 10 },
+      });
+      const versions = (versionsRes.body?.data ?? []) as Array<{
+        id: string;
+        attributes?: { appStoreState?: string; versionString?: string };
+      }>;
+
+      // Select active live version, editable version, or highest version
+      const activeVersion =
+        versions.find((v) => v.attributes?.appStoreState === "READY_FOR_SALE") ||
+        versions.find((v) => v.attributes?.appStoreState === "PREPARE_FOR_SUBMISSION") ||
+        versions[0];
+
+      const targetVersions = activeVersion ? [activeVersion] : [];
+
+      for (const ver of targetVersions) {
+        const vLocRes = await requester({
+          method: "GET",
+          path: "/v1/appStoreVersions/{id}/appStoreVersionLocalizations",
+          pathParams: { id: ver.id },
+          query: { limit: 50 },
+        });
+        const vLocs = (vLocRes.body?.data ?? []) as Array<{
+          id: string;
+          attributes?: { locale?: string; keywords?: string; description?: string };
+        }>;
+
+        for (const vl of vLocs) {
+          const locCode = vl.attributes?.locale ?? app.primaryLocale ?? "en-US";
+
+          // Check screenshots
+          const shotRes = await requester({
+            method: "GET",
+            path: "/v1/appStoreVersionLocalizations/{id}/appScreenshotSets",
+            pathParams: { id: vl.id },
+            query: { limit: 10 },
+          });
+          const shotSets = (shotRes.body?.data ?? []) as unknown[];
+
+          localesMap[locCode] = {
+            ...localesMap[locCode],
+            keywords: vl.attributes?.keywords ?? "",
+            description: vl.attributes?.description ?? "",
+            hasScreenshots: shotSets.length > 0,
+            screenshotCount: shotSets.length,
+          };
+        }
+      }
+
+      const appMetadata: AppMetadata = {
+        appId: app.id,
+        appName: app.name,
+        defaultLocale: app.primaryLocale ?? "en-US",
+        locales: localesMap,
+      };
+
+      const audit = auditAsoMetadata("apple", appMetadata);
+      reports.push(audit);
+    } catch (err) {
+      failedApps.push({ appId: app.id, error: (err as Error).message || String(err) });
     }
-
-    const appMetadata: AppMetadata = {
-      appId: app.id,
-      appName: app.name,
-      defaultLocale: app.primaryLocale ?? "en-US",
-      locales: localesMap,
-    };
-
-    const audit = auditAsoMetadata("apple", appMetadata);
-    reports.push(audit);
   }
 
   const totalScore = reports.reduce((acc, r) => acc + r.score, 0);
@@ -175,8 +208,17 @@ export async function executeAsoAuditPortfolio(
     }
   }
 
+  if (failedApps.length > 0) {
+    lines.push(``);
+    lines.push(`### Inaccessible / Failed Apps`);
+    for (const f of failedApps) {
+      lines.push(`- App ID \`${f.appId}\`: ${f.error}`);
+    }
+  }
+
   return {
     reports,
+    failedApps,
     averageScore,
     totalGaps,
     formattedMarkdown: lines.join("\n"),

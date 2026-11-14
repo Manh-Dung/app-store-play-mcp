@@ -22,9 +22,32 @@ test("isWriteTool classifies reads vs writes", () => {
   assert.equal(isWriteTool("promote_release"), true);
   assert.equal(isWriteTool("create_release"), true);
   assert.equal(isWriteTool("update_rollout"), true);
-  assert.equal(isWriteTool("aso_audit_app"), false);
+  assert.equal(isWriteTool("aso_audit_app"), true); // S6: opens edit session (edits.insert/delete)
   assert.equal(isWriteTool("aso_audit_portfolio"), false);
   assert.equal(isWriteTool("metadata_dry_run_preview"), false);
+
+  // Verify previously leaked codegen tools without underscores (Blocker 2)
+  const leakedToCheck = [
+    "appsigning_enroll_app",
+    "appsigning_rotate_app_signing_key",
+    "appstoreappsreview_createappstorehostedapp",
+    "appstoreappsreview_uploadapk",
+    "appstoreappsreview_updateappstorehostedapp",
+    "edits_apks_addexternallyhosted",
+    "edits_images_deleteall",
+    "edits_listings_deleteall",
+    "externaltransactions_createexternaltransaction",
+    "externaltransactions_refundexternaltransaction",
+    "internalappsharingartifacts_uploadapk",
+    "internalappsharingartifacts_uploadbundle",
+    "orders_reviewrefund",
+    "purchases_subscriptionsv2_cancelplantransition",
+    "purchases_subscriptionsv2_scheduleplantransition",
+    "apps_promoted_purchases_replace_to_many_relationship",
+  ];
+  for (const toolName of leakedToCheck) {
+    assert.equal(isWriteTool(toolName), true, `${toolName} must be recognized as write tool`);
+  }
 });
 
 test("isDestructiveTool identifies destructive actions and production deployments", () => {
