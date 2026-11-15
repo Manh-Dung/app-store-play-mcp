@@ -49,6 +49,7 @@ CONFIG_DIR = Path.home() / ".config" / "google-play-analytics-mcp"
 # Candidate locations for the service-account key, in priority order.
 _SA_CANDIDATES = [
     os.environ.get("GOOGLE_PLAY_SA_JSON"),
+    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
     str(CONFIG_DIR / "google-play.json"),
     str(Path(__file__).resolve().parent / "google-play.json"),
 ]

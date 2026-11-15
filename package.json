@@ -1,17 +1,35 @@
 {
-  "license": "MIT",
   "name": "@store-mcp/monorepo",
-  "private": true,
-  "scripts": {
-    "build": "npm run build --workspace @store-mcp/shared && npm run build --workspace @store-mcp/play-operate && npm run build --workspace @store-mcp/appstore-operate",
-    "clean": "rm -rf packages/*/dist",
-    "test": "npm run test --workspaces --if-present && python3 -m unittest discover -s packages/play-analytics -p \"test_*.py\"",
-    "typecheck": "npm run typecheck --workspace @store-mcp/shared && npm run typecheck --workspace @store-mcp/play-operate && npm run typecheck --workspace @store-mcp/appstore-operate"
-  },
   "version": "0.1.0",
+  "description": "Unified MCP Server for Google Play & Apple App Store",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "store-mcp": "bin/store-mcp.js"
+  },
+  "scripts": {
+    "build:gateway": "tsc",
+    "build": "npm run build --workspace @store-mcp/shared && npm run build --workspace @store-mcp/play-operate && npm run build --workspace @store-mcp/appstore-operate && tsc",
+    "clean": "rm -rf dist packages/*/dist",
+    "start": "node bin/store-mcp.js",
+    "test": "npm run test --workspaces --if-present && python3 -m unittest discover -s packages/play-analytics -p \"test_*.py\" && node --test dist/**/*.test.js",
+    "typecheck": "npm run typecheck --workspace @store-mcp/shared && npm run typecheck --workspace @store-mcp/play-operate && npm run typecheck --workspace @store-mcp/appstore-operate && tsc --noEmit"
+  },
   "workspaces": [
     "packages/play-operate",
     "packages/appstore-operate",
     "packages/shared"
-  ]
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@store-mcp/appstore-operate": "0.5.0",
+    "@store-mcp/play-operate": "0.2.0",
+    "@store-mcp/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
 }

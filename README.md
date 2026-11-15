@@ -2,11 +2,13 @@
 
 Monorepo Model Context Protocol (MCP) toàn diện để quản lý, phát hành và phân tích ứng dụng trên cả Google Play và Apple App Store.
 
-**Kiến trúc:** 1 monorepo, **3 MCP server riêng biệt, 3 process độc lập** — đảm bảo cô lập rủi ro bảo mật khóa và phân quyền chuẩn xác:
-- **`play-operate`** (TypeScript): Quản lý phát hành, cấu hình track, danh sách cửa hàng, monetization và vitals cho Google Play.
-- **`appstore-operate`** (TypeScript): Quản lý TestFlight, build Xcode Cloud, nộp duyệt, ASO và quản lý danh mục App Store Connect.
-- **`play-analytics`** (Python, chỉ đọc): Phân tích lượt tải, từ khóa tìm kiếm, tỷ lệ chuyển đổi và lý do hủy gói từ Cloud Storage bulk reports.
-- **`@store-mcp/shared`** (TypeScript): Lớp an toàn dùng chung (Two-Phase Confirmation, Tool Budget Limiter, Quy tắc ASO, Redaction, Error Translation).
+**Kiến trúc linh hoạt:**
+- **Unified Gateway MCP (`bin/store-mcp.js`)**: 1 MCP Server duy nhất tại root gộp toàn bộ 3 phân hệ, tự động khử trùng lặp công cụ (`play_*` vs `appstore_*`), tích hợp unified meta-tools (`accounts_list`, `auth_status`, `store_search_tools`), hỗ trợ lọc qua `--stores`, `--workers`, `--read-only`, `--max-tools`.
+- **3 Package độc lập (`packages/*`)**: Vẫn được giữ nguyên vẹn để có thể chạy riêng lẻ từng process độc lập khi cần cô lập tuyệt đối:
+  - **`play-operate`** (TypeScript): Quản lý phát hành, cấu hình track, danh sách cửa hàng, monetization và vitals cho Google Play.
+  - **`appstore-operate`** (TypeScript): Quản lý TestFlight, build Xcode Cloud, nộp duyệt, ASO và quản lý danh mục App Store Connect.
+  - **`play-analytics`** (Python, chỉ đọc): Phân tích lượt tải, từ khóa tìm kiếm, tỷ lệ chuyển đổi và lý do hủy gói từ Cloud Storage bulk reports.
+  - **`@store-mcp/shared`** (TypeScript): Lớp an toàn dùng chung (Two-Phase Confirmation, Tool Budget Limiter, Quy tắc ASO, Redaction, Error Translation).
 
 ---
 
@@ -22,23 +24,41 @@ Monorepo Model Context Protocol (MCP) toàn diện để quản lý, phát hành
 
 ---
 
-## Cài đặt và Kiểm thử
+## Cài đặt và Khởi chạy Nhanh
 
-### 1. Build Monorepo (Node.js 18+)
+Xem hướng dẫn chi tiết từng bước tại [docs/QUICKSTART.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/QUICKSTART.md).
+
+### 1. Build Monorepo & Gateway (Node.js 18+)
 ```bash
 npm install
 npm run build
 npm test
 ```
-*Lệnh `npm test` tự động chạy toàn bộ 33 test cases qua cả TypeScript workspaces và Python analytics.*
+*Lệnh `npm test` tự động chạy toàn bộ 40 test cases qua cả TypeScript workspaces, root gateway và Python analytics.*
 
-### 2. Thiết lập Play Analytics (Python 3.11+)
+### 2. Thiết lập Play Analytics (Python 3.11+, tùy chọn)
 ```bash
-cd packages/play-analytics
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3 -m unittest discover -s . -p "test_*.py"
+python3 -m venv packages/play-analytics/.venv
+packages/play-analytics/.venv/bin/pip install -r packages/play-analytics/requirements.txt
+```
+
+### 3. Cấu hình Credentials (.mcp.json)
+```bash
+cp .mcp.json.example .mcp.json
+# Cập nhật đường dẫn tuyệt đối và các biến môi trường Apple, Google Play vào file .mcp.json
+```
+
+### 4. Kiểm tra Kết nối
+```bash
+node -e "
+import('./dist/gateway.js').then(async ({ createGatewayServer }) => {
+  const { server, close } = await createGatewayServer();
+  const handler = server._requestHandlers.get('tools/call');
+  const res = await handler({ method: 'tools/call', params: { name: 'auth_status', arguments: { store: 'all' } } });
+  console.log(res.content[0].text);
+  await close();
+});
+"
 ```
 
 ---
@@ -46,6 +66,36 @@ python3 -m unittest discover -s . -p "test_*.py"
 ## Cấu hình MCP Client
 
 Xem mẫu chi tiết tại file [`.mcp.json.example`](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/.mcp.json.example).
+
+### Lựa chọn 1: Unified Gateway (Khuyên dùng — 1 MCP server duy nhất)
+
+```json
+{
+  "mcpServers": {
+    "store-mcp": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/app-store-play-mcp/bin/store-mcp.js",
+        "--stores", "play,appstore,analytics",
+        "--workers", "release,testflight,listings,marketing",
+        "--max-tools", "60"
+      ],
+      "env": {
+        "STORE_MCP_ALLOW_DESTRUCTIVE": "0",
+        "STORE_MCP_READ_ONLY": "0",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/ABSOLUTE/PATH/TO/play-service-account.json",
+        "ASC_KEY_ID": "XXXXXXXXXX",
+        "ASC_ISSUER_ID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "ASC_PRIVATE_KEY_PATH": "/ABSOLUTE/PATH/TO/AuthKey_XXXXXXXXXX.p8",
+        "GOOGLE_PLAY_REPORTS_BUCKET": "pubsite_prod_rev_XXXXXXXXXXXXXXXX",
+        "GOOGLE_PLAY_SA_JSON": "/ABSOLUTE/PATH/TO/play-service-account.json"
+      }
+    }
+  }
+}
+```
+
+### Lựa chọn 2: Chạy 3 server riêng biệt độc lập
 
 ```json
 {
@@ -92,6 +142,7 @@ Xem mẫu chi tiết tại file [`.mcp.json.example`](file:///Users/nguyenmanhdu
 
 ## Tài liệu chi tiết
 
+- [docs/QUICKSTART.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/QUICKSTART.md) — Hướng dẫn cài đặt nhanh 4 bước cho người mới từ clone repo đến kiểm tra live API.
 - [docs/WORKERS.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/WORKERS.md) — Chi tiết danh mục Worker Profiles, quản lý context window và cấu hình mẫu.
 - [docs/QUOTAS.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/QUOTAS.md) — Hạn mức gọi API (Rate limits), giới hạn ký tự và chính sách an toàn hai Store.
 - [docs/SETUP.md](file:///Users/nguyenmanhdung/Workspace/app-store-play-mcp/docs/SETUP.md) — Hướng dẫn tạo Service Account Google Play, file khóa `.p8` Apple và bucket GCS.
