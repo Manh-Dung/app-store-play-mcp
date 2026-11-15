@@ -1,5 +1,5 @@
 {
-  "name": "app-store-play-mcp",
+  "name": "@pippi_mf/app-store-play-mcp",
   "version": "0.1.0",
   "description": "Unified Model Context Protocol (MCP) Server for Google Play & Apple App Store",
   "license": "MIT",

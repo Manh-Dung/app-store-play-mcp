@@ -1,17 +1,45 @@
-# Hướng dẫn Khởi đầu Nhanh (Quickstart Guide)
+# Hướng dẫn Cài đặt & Sử dụng (Setup Guide)
 
-Tài liệu này hướng dẫn cài đặt và cấu hình **store-mcp Unified Gateway** từ đầu cho người mới trong 4 bước đơn giản.
-
----
-
-## Yêu cầu Hệ thống
-- **Node.js**: >= 18.0.0
-- **npm**: >= 9.0.0
-- **Python**: >= 3.11 (tùy chọn, cần thiết nếu dùng phân hệ phân tích `play-analytics`)
+Tài liệu này hướng dẫn cách sử dụng **@pippi_mf/app-store-play-mcp** — Unified MCP Server cho Google Play & Apple App Store.
 
 ---
 
-## 4 Bước Cài đặt
+## Cách 1: Sử dụng ngay qua `npx` (Khuyên dùng — Không cần clone repo)
+
+Người dùng **hoàn toàn không cần tải code hay clone repo về máy**. Chỉ cần cấu hình trực tiếp vào MCP client (Cursor, Claude Desktop, Antigravity, Windsurf):
+
+```json
+{
+  "mcpServers": {
+    "store-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@pippi_mf/app-store-play-mcp",
+        "--stores", "play,appstore,analytics",
+        "--workers", "release,testflight,listings,marketing",
+        "--max-tools", "60"
+      ],
+      "env": {
+        "STORE_MCP_ALLOW_DESTRUCTIVE": "0",
+        "STORE_MCP_READ_ONLY": "0",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/path/to/play-service-account.json",
+        "ASC_KEY_ID": "XXXXXXXXXX",
+        "ASC_ISSUER_ID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "ASC_PRIVATE_KEY_PATH": "/path/to/AuthKey_XXXXXXXXXX.p8",
+        "GOOGLE_PLAY_REPORTS_BUCKET": "pubsite_prod_rev_XXXXXXXXXXXXXXXX",
+        "GOOGLE_PLAY_SA_JSON": "/path/to/play-service-account.json"
+      }
+    }
+  }
+}
+```
+
+Client sẽ tự động tải package từ npm registry và khởi chạy ngầm mà không cần cài đặt thêm gì.
+
+---
+
+## Cách 2: Cài đặt từ mã nguồn (Dành cho Developer muốn phát triển thêm)
 
 ### Bước 1: Clone và Biên dịch Dự án
 

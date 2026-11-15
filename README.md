@@ -73,9 +73,10 @@ Xem mẫu chi tiết tại file [`.mcp.json.example`](file:///Users/nguyenmanhdu
 {
   "mcpServers": {
     "store-mcp": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "/ABSOLUTE/PATH/TO/app-store-play-mcp/bin/store-mcp.js",
+        "-y",
+        "@pippi_mf/app-store-play-mcp",
         "--stores", "play,appstore,analytics",
         "--workers", "release,testflight,listings,marketing",
         "--max-tools", "60"
