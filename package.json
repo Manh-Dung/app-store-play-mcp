@@ -1,17 +1,28 @@
 {
-  "name": "@store-mcp/monorepo",
+  "name": "app-store-play-mcp",
   "version": "0.1.0",
-  "description": "Unified MCP Server for Google Play & Apple App Store",
+  "description": "Unified Model Context Protocol (MCP) Server for Google Play & Apple App Store",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "store-mcp": "bin/store-mcp.js"
+    "store-mcp": "bin/store-mcp.js",
+    "app-store-play-mcp": "bin/store-mcp.js"
   },
+  "files": [
+    "bin/",
+    "dist/",
+    "packages/play-analytics/server.py",
+    "packages/play-analytics/gp_client.py",
+    "packages/play-analytics/requirements.txt",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:@modelcontextprotocol/sdk --external:googleapis --external:jsonwebtoken --external:undici --external:zod",
+    "prepublishOnly": "npm run bundle",
     "build:gateway": "tsc",
-    "build": "npm run build --workspace @store-mcp/shared && npm run build --workspace @store-mcp/play-operate && npm run build --workspace @store-mcp/appstore-operate && tsc",
+    "build": "npm run build --workspace @store-mcp/shared && npm run build --workspace @store-mcp/play-operate && npm run build --workspace @store-mcp/appstore-operate && tsc && npm run bundle",
     "clean": "rm -rf dist packages/*/dist",
     "start": "node bin/store-mcp.js",
     "test": "npm run test --workspaces --if-present && python3 -m unittest discover -s packages/play-analytics -p \"test_*.py\" && node --test dist/**/*.test.js",
@@ -26,10 +37,15 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@store-mcp/appstore-operate": "0.5.0",
     "@store-mcp/play-operate": "0.2.0",
-    "@store-mcp/shared": "0.1.0"
+    "@store-mcp/shared": "0.1.0",
+    "googleapis": "^187.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "undici": "^6.21.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.2"
   }
 }
