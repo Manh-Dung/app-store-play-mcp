@@ -81,9 +81,9 @@ packages/play-analytics/.venv/bin/pip install -r packages/play-analytics/require
 #### 1. Chuẩn bị file khóa
 - **Google Play**: Tải file Service Account JSON từ Google Cloud Console (ví dụ lưu tại `credentials/play-service-account.json`). Đảm bảo Service Account đã được thêm vào **Google Play Console > Users and permissions**.
 - **Apple App Store Connect**: Vào **App Store Connect > Users and Access > Integrations > App Store Connect API**:
-  - Tải file khóa riêng: `AuthKey_<KEY_ID>.p8` (ví dụ lưu tại `credentials/AuthKey_74AWGSRPXQ.p8`).
-  - Lấy `Key ID` (10 ký tự, ví dụ: `74AWGSRPXQ`).
-  - Lấy `Issuer ID` (UUID, ví dụ: `69620501-6972-4722-86d1-a9c43bd6826e`).
+  - Tải file khóa riêng: `AuthKey_<KEY_ID>.p8` (ví dụ lưu tại `credentials/AuthKey_XXXXXXXXXX.p8`).
+  - Lấy `Key ID` (10 ký tự, ví dụ: `XXXXXXXXXX`).
+  - Lấy `Issuer ID` (UUID, ví dụ: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
 
 > Thư mục `credentials/` đã được cấu hình trong `.gitignore`, bạn có thể an tâm lưu trữ khóa tại đây.
 
@@ -109,9 +109,9 @@ Chỉnh sửa file `.mcp.json` với đường dẫn tuyệt đối trên máy c
         "STORE_MCP_ALLOW_DESTRUCTIVE": "0",
         "STORE_MCP_READ_ONLY": "0",
         "GOOGLE_APPLICATION_CREDENTIALS": "/ABSOLUTE/PATH/TO/credentials/play-service-account.json",
-        "ASC_KEY_ID": "74AWGSRPXQ",
-        "ASC_ISSUER_ID": "69620501-6972-4722-86d1-a9c43bd6826e",
-        "ASC_PRIVATE_KEY_PATH": "/ABSOLUTE/PATH/TO/credentials/AuthKey_74AWGSRPXQ.p8",
+        "ASC_KEY_ID": "XXXXXXXXXX",
+        "ASC_ISSUER_ID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "ASC_PRIVATE_KEY_PATH": "/ABSOLUTE/PATH/TO/credentials/AuthKey_XXXXXXXXXX.p8",
         "GOOGLE_PLAY_REPORTS_BUCKET": "pubsite_prod_rev_XXXXXXXXXXXXXXXX",
         "GOOGLE_PLAY_SA_JSON": "/ABSOLUTE/PATH/TO/credentials/play-service-account.json"
       }
